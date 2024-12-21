@@ -8,11 +8,6 @@ class OrderType(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
 
-class OrderStatus(str, Enum):
-    OPEN = "OPEN"
-    CLOSED = "CLOSED"
-    CANCELLED = "CANCELLED"
-
 class Position(BaseModel):
     ticket: int = Field(..., description="Position ticket/order ID")
     symbol: str = Field(..., description="Trading symbol")

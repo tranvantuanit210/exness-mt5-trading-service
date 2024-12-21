@@ -8,6 +8,11 @@ from ..models.trade import Position, TradeResponse, ModifyPositionRequest, Order
 import asyncio
 from tenacity import retry, stop_after_attempt, wait_exponential
 from ..utils.retry_helper import handle_retry_error
+from ..utils.constants import (
+    MAX_RETRIES, VERIFICATION_WAIT_TIME, 
+    TRADE_DEVIATION, TRADE_MAGIC,
+    RETRY_MULTIPLIER, RETRY_MIN_WAIT, RETRY_MAX_WAIT
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +23,6 @@ class MT5PositionService:
     including risk management operations like hedging.
     """
 
-    # Class constants
-    MAX_RETRIES = 3
-    VERIFICATION_WAIT_TIME = 1.0  # seconds
-    TRADE_DEVIATION = 20
-    TRADE_MAGIC = 234000
-
     def __init__(self, base_service: MT5BaseService):
         """
         Initialize position service with base MT5 connection.
@@ -32,7 +31,7 @@ class MT5PositionService:
         - base_service: Base MT5 service for connection management
         """
         self.base_service = base_service
-        self.max_retries = self.MAX_RETRIES
+        self.max_retries = MAX_RETRIES
         
     async def get_positions(self) -> List[Position]:
         """
@@ -80,9 +79,9 @@ class MT5PositionService:
             return []
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=RETRY_MULTIPLIER, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=MAX_RETRIES)
     )
     async def modify_position(self, ticket: int, modify_request: ModifyPositionRequest) -> TradeResponse:
         """
@@ -142,9 +141,9 @@ class MT5PositionService:
             return TradeResponse(order_id=0, status="error", message=str(e))
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=RETRY_MULTIPLIER, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=MAX_RETRIES)
     )
     async def close_position(self, ticket: int) -> TradeResponse:
         """
@@ -279,8 +278,8 @@ class MT5PositionService:
                 "volume": float(position.volume),
                 "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
                 "price": mt5.symbol_info_tick(position.symbol).ask if position.type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(position.symbol).bid,
-                "deviation": 20,
-                "magic": 234000,
+                "deviation": self.TRADE_DEVIATION,
+                "magic": self.TRADE_MAGIC,
                 "comment": "python script hedge",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,

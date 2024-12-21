@@ -4,6 +4,7 @@ import MetaTrader5 as mt5
 import logging
 from .mt5_base_service import MT5BaseService
 from ..models.trade import TradeRequest, TradeResponse, PendingOrder, OrderType
+from ..utils.constants import TRADE_DEVIATION, TRADE_MAGIC
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,8 @@ class MT5OrderService:
                     if trade_request.order_type == OrderType.BUY 
                     else mt5.ORDER_TYPE_SELL),
             "price": tick.ask if trade_request.order_type == OrderType.BUY else tick.bid,
-            "deviation": 20,
-            "magic": 234000,
+            "deviation": TRADE_DEVIATION,
+            "magic": TRADE_MAGIC,
             "comment": "python script order",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,

@@ -1,7 +1,6 @@
 import MetaTrader5 as mt5
 import logging
 import asyncio
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,6 @@ class MT5BaseService:
     """
     _instance = None
     _initialized = False
-    _login_info = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -36,11 +34,6 @@ class MT5BaseService:
     def initialized(self):
         """Check if MT5 connection is initialized"""
         return self._initialized
-
-    @property
-    def login_info(self):
-        """Get current login information"""
-        return self._login_info
         
     async def connect(self, login: int, password: str, server: str) -> bool:
         """

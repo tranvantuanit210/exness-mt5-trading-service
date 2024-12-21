@@ -8,6 +8,11 @@ from ..models.trade import (
 from tenacity import retry, stop_after_attempt, wait_exponential
 import asyncio
 from ..utils.retry_helper import handle_retry_error
+from ..utils.constants import (
+    MAX_RETRIES, VERIFICATION_WAIT_TIME, 
+    TRADE_DEVIATION, TRADE_MAGIC,
+    RETRY_MULTIPLIER, RETRY_MIN_WAIT, RETRY_MAX_WAIT
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +21,6 @@ class MT5TradingService:
     Service for handling trading operations in MT5.
     Provides functionality for executing trades, managing positions and account information.
     """
-    # Class constants
-    MAX_RETRIES = 3
-    VERIFICATION_WAIT_TIME = 1.0  # seconds
-
     def __init__(self, base_service: MT5BaseService):
         """
         Initialize trading service with base MT5 connection.
@@ -28,7 +29,7 @@ class MT5TradingService:
         - base_service: Base MT5 service for connection management
         """
         self.base_service = base_service
-        self.max_retries = self.MAX_RETRIES  # Using class constant
+        self.max_retries = MAX_RETRIES
 
     @property
     def initialized(self):
@@ -60,8 +61,8 @@ class MT5TradingService:
                     if trade_request.order_type == OrderType.BUY 
                     else mt5.ORDER_TYPE_SELL),
             "price": tick.ask if trade_request.order_type == OrderType.BUY else tick.bid,
-            "deviation": 20,
-            "magic": 234000,
+            "deviation": TRADE_DEVIATION,
+            "magic": TRADE_MAGIC,
             "comment": "python script order",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
@@ -76,8 +77,8 @@ class MT5TradingService:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+        wait=wait_exponential(multiplier=RETRY_MULTIPLIER, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=MAX_RETRIES)
     )
     async def execute_trade(self, trade_request: TradeRequest) -> TradeResponse:
         """
@@ -146,7 +147,7 @@ class MT5TradingService:
         """
         try:
             # Wait briefly to ensure order processing
-            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            await asyncio.sleep(VERIFICATION_WAIT_TIME)
             
             # Get the newly created position
             position = mt5.positions_get(ticket=result.order)
