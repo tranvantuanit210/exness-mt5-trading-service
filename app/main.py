@@ -1,12 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from dotenv import load_dotenv
 import logging
 import uvicorn
 from contextlib import asynccontextmanager
+from app.config import settings
+from app.models.notification import NotificationConfig
 
-from app.routers import market_info, orders, history, position, risk_management, trading, account
+from app.routers import market_info, orders, history, position, risk_management, trading, account, notification
 from app.services.mt5_base_service import MT5BaseService
 from app.services.mt5_trading_service import MT5TradingService
 from app.services.mt5_market_service import MT5MarketService
@@ -15,6 +16,7 @@ from app.services.mt5_position_service import MT5PositionService
 from app.services.mt5_history_service import MT5HistoryService
 from app.services.mt5_account_service import MT5AccountService
 from app.services.mt5_risk_service import MT5RiskService
+from app.services.mt5_notification_service import MT5NotificationService
 
 # Initialize services with shared MT5 connection
 mt5_base_service = MT5BaseService()
@@ -27,6 +29,7 @@ mt5_position_service = MT5PositionService(mt5_base_service)
 mt5_history_service = MT5HistoryService(mt5_base_service)
 mt5_account_service = MT5AccountService(mt5_base_service)
 mt5_risk_service = MT5RiskService(mt5_base_service)
+mt5_notification_service = MT5NotificationService(mt5_base_service)
 
 # Configure logging
 logging.basicConfig(
@@ -34,10 +37,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,12 +47,22 @@ async def lifespan(app: FastAPI):
     # Startup: Connect to MT5
     try:
         connected = await mt5_base_service.connect(
-            login=int(os.getenv("MT5_LOGIN")),
-            password=os.getenv("MT5_PASSWORD"),
-            server=os.getenv("MT5_SERVER")
+            login=settings.MT5_LOGIN,
+            password=settings.MT5_PASSWORD,
+            server=settings.MT5_SERVER
         )
         if not connected:
             raise Exception("Failed to connect to MT5")
+        
+        # Initialize notification service
+        notification_config = NotificationConfig(
+            telegram_token=settings.TELEGRAM_BOT_TOKEN,
+            telegram_chat_id=settings.TELEGRAM_CHAT_ID,
+            discord_webhook=settings.DISCORD_WEBHOOK_URL,
+        )
+        await mt5_notification_service.initialize(notification_config)
+        logger.info("Notification service initialized")
+        
     except Exception as e:
         logger.error(f"Startup error: {str(e)}")
         raise
@@ -113,6 +122,9 @@ app.include_router(
 )
 app.include_router(
     risk_management.get_router(mt5_risk_service)
+)
+app.include_router(
+    notification.get_router(mt5_notification_service)
 )
 
 def main():
