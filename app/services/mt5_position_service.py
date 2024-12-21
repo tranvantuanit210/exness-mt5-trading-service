@@ -9,11 +9,39 @@ from ..models.trade import Position, TradeResponse, ModifyPositionRequest, Order
 logger = logging.getLogger(__name__)
 
 class MT5PositionService:
+    """
+    Service for managing trading positions in MT5.
+    Provides functionality for retrieving, modifying, and closing positions,
+    including risk management operations like hedging.
+    """
+
     def __init__(self, base_service: MT5BaseService):
+        """
+        Initialize position service with base MT5 connection.
+        
+        Parameters:
+        - base_service: Base MT5 service for connection management
+        """
         self.base_service = base_service
 
     async def get_positions(self) -> List[Position]:
-        """Get all open positions"""
+        """
+        Get all currently open positions.
+        
+        Returns:
+        - List[Position]: List of open positions with details:
+            - Ticket number
+            - Symbol
+            - Type (buy/sell)
+            - Volume
+            - Open price
+            - Stop Loss
+            - Take Profit
+            - Current profit
+            - Open time
+            
+        Note: Returns empty list if no positions or connection fails
+        """
         if not await self.base_service.ensure_connected():
             return []
             
@@ -42,7 +70,23 @@ class MT5PositionService:
             return []
 
     async def modify_position(self, ticket: int, modify_request: ModifyPositionRequest) -> TradeResponse:
-        """Modify position's SL/TP"""
+        """
+        Modify Stop Loss and Take Profit levels for an existing position.
+        
+        Parameters:
+        - ticket: Position ticket to modify
+        - modify_request: New SL/TP levels containing:
+            - stop_loss: New Stop Loss price (optional)
+            - take_profit: New Take Profit price (optional)
+        
+        Returns:
+        - TradeResponse with:
+            - order_id: Modified position ticket (0 if failed)
+            - status: Success/error status
+            - message: Modification details or error message
+            
+        Note: Only provided levels will be modified, others remain unchanged
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(order_id=0, status="error", message="Not connected to MT5")
         try:
@@ -81,7 +125,20 @@ class MT5PositionService:
             return TradeResponse(order_id=0, status="error", message=str(e))
 
     async def close_position(self, ticket: int) -> TradeResponse:
-        """Close specific position by ticket"""
+        """
+        Close a specific position by its ticket number.
+        
+        Parameters:
+        - ticket: Position ticket to close
+        
+        Returns:
+        - TradeResponse with:
+            - order_id: Closure order ticket (0 if failed)
+            - status: Success/error status
+            - message: Closure details or error message
+            
+        Note: Closes entire position volume at current market price
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,
@@ -136,7 +193,17 @@ class MT5PositionService:
             )
 
     async def close_all_positions(self) -> List[TradeResponse]:
-        """Close all open positions"""
+        """
+        Close all currently open positions.
+        
+        Returns:
+        - List[TradeResponse]: List of closure results for each position:
+            - order_id: Closure order ticket
+            - status: Success/error for each position
+            - message: Individual closure details
+            
+        Note: Attempts to close all positions even if some fail
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:
@@ -151,7 +218,20 @@ class MT5PositionService:
             return []
 
     async def create_hedge_position(self, ticket: int) -> TradeResponse:
-        """Create hedge position"""
+        """
+        Create a hedging position against an existing position.
+        
+        Parameters:
+        - ticket: Original position ticket to hedge against
+        
+        Returns:
+        - TradeResponse with:
+            - order_id: New hedge position ticket (0 if failed)
+            - status: Success/error status
+            - message: Hedging details or error message
+            
+        Note: Creates opposite position with same volume to lock profit/loss
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(order_id=0, status="error", message="Not connected to MT5")
         try:

@@ -12,15 +12,38 @@ from ..models.trade import (
 logger = logging.getLogger(__name__)
 
 class MT5TradingService:
+    """
+    Service for handling trading operations in MT5.
+    Provides functionality for executing trades, managing positions and account information.
+    """
+
     def __init__(self, base_service: MT5BaseService):
+        """
+        Initialize trading service with base MT5 connection.
+        
+        Parameters:
+        - base_service: Base MT5 service for connection management
+        """
         self.base_service = base_service
 
     @property
     def initialized(self):
+        """Check if trading service is initialized and connected"""
         return self.base_service.initialized
 
     def _prepare_trade_request(self, trade_request: TradeRequest) -> Dict[str, Any]:
-        """Prepare trade request parameters for MT5"""
+        """
+        Prepare trade request parameters for MT5 API.
+        
+        Parameters:
+        - trade_request: Trading request with order details
+        
+        Returns:
+        - Dict containing formatted request parameters for MT5 API
+        
+        Raises:
+        - ValueError: If symbol information cannot be retrieved
+        """
         tick = mt5.symbol_info_tick(trade_request.symbol)
         if tick is None:
             raise ValueError(f"Cannot get symbol info for {trade_request.symbol}")
@@ -48,7 +71,23 @@ class MT5TradingService:
         return request
 
     async def execute_trade(self, trade_request: TradeRequest) -> TradeResponse:
-        """Execute a market order"""
+        """
+        Execute a market order with specified parameters.
+        
+        Parameters:
+        - trade_request: Trade request containing:
+            - Symbol to trade
+            - Order type (buy/sell)
+            - Volume
+            - Optional stop loss
+            - Optional take profit
+        
+        Returns:
+        - TradeResponse with:
+            - order_id: Executed order ticket (0 if failed)
+            - status: 'success' or 'error'
+            - message: Success/error details
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,
@@ -84,7 +123,21 @@ class MT5TradingService:
             )
 
     async def get_positions(self) -> List[Position]:
-        """Get all open positions"""
+        """
+        Get all currently open positions.
+        
+        Returns:
+        - List[Position]: List of open positions with details:
+            - Ticket number
+            - Symbol
+            - Type (buy/sell)
+            - Volume
+            - Open price
+            - Stop loss
+            - Take profit
+            - Current profit
+            - Open time
+        """
         if not await self.base_service.ensure_connected():
             return []
             
@@ -113,7 +166,18 @@ class MT5TradingService:
             return []
 
     async def get_account_info(self) -> Optional[AccountInfo]:
-        """Get account information"""
+        """
+        Get current account information and balance.
+        
+        Returns:
+        - AccountInfo with:
+            - Balance
+            - Equity
+            - Margin
+            - Free margin
+            - Number of open positions
+        - None: If account info cannot be retrieved
+        """
         if not await self.base_service.ensure_connected():
             return None
             
@@ -135,7 +199,18 @@ class MT5TradingService:
             return None
 
     async def close_position(self, ticket: int) -> TradeResponse:
-        """Close specific position by ticket"""
+        """
+        Close a specific position by its ticket number.
+        
+        Parameters:
+        - ticket: Position ticket to close
+        
+        Returns:
+        - TradeResponse with:
+            - order_id: Closure order ticket
+            - status: Success/error
+            - message: Closure details
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,
@@ -190,7 +265,16 @@ class MT5TradingService:
             )
 
     async def modify_trade_levels(self, ticket: int, modify_request: ModifyTradeRequest) -> TradeResponse:
-        """Modify trade's SL/TP levels"""
+        """
+        Modify stop loss and take profit levels for an open position.
+        
+        Parameters:
+        - ticket: Position ticket to modify
+        - modify_request: New SL/TP levels
+        
+        Returns:
+        - TradeResponse with modification result
+        """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,

@@ -9,7 +9,19 @@ from ..models.trade import HistoricalOrder, HistoricalDeal, HistoricalPosition
 logger = logging.getLogger(__name__)
 
 class MT5HistoryService:
+    """
+    Service for retrieving historical trading data from MT5.
+    Provides functionality for accessing historical orders, deals, and positions
+    within specified date ranges.
+    """
+
     def __init__(self, base_service: MT5BaseService):
+        """
+        Initialize history service with base MT5 connection.
+        
+        Parameters:
+        - base_service: Base MT5 service for connection management
+        """
         self.base_service = base_service
 
     async def get_history_orders(
@@ -17,7 +29,26 @@ class MT5HistoryService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> List[HistoricalOrder]:
-        """Get order history"""
+        """
+        Get historical orders within specified date range.
+        
+        Parameters:
+        - start_date: Starting date for history query (optional)
+        - end_date: Ending date for history query (optional)
+        
+        Returns:
+        - List[HistoricalOrder]: List of historical orders with details:
+            - Order ticket
+            - Symbol traded
+            - Order type (market/pending)
+            - Volume
+            - Open price
+            - Opening time
+            - Order state
+            - Profit/Loss
+            
+        Note: Returns all history if dates not specified
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:
@@ -43,7 +74,26 @@ class MT5HistoryService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> List[HistoricalDeal]:
-        """Get deal history"""
+        """
+        Get historical deals/trades within specified date range.
+        
+        Parameters:
+        - start_date: Starting date for history query (optional)
+        - end_date: Ending date for history query (optional)
+        
+        Returns:
+        - List[HistoricalDeal]: List of historical deals with details:
+            - Deal ticket
+            - Related order ticket
+            - Symbol traded
+            - Deal type (buy/sell)
+            - Volume
+            - Price
+            - Execution time
+            - Profit/Loss
+            
+        Note: Returns all history if dates not specified
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:
@@ -69,7 +119,30 @@ class MT5HistoryService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> List[HistoricalPosition]:
-        """Get position history"""
+        """
+        Get historical closed positions within specified date range.
+        
+        Parameters:
+        - start_date: Starting date for history query (optional)
+        - end_date: Ending date for history query (optional)
+        
+        Returns:
+        - List[HistoricalPosition]: List of historical positions with details:
+            - Position ticket
+            - Symbol traded
+            - Position type (long/short)
+            - Volume
+            - Entry price
+            - Exit price
+            - Opening time
+            - Closing time
+            - Final profit/loss
+            
+        Note: 
+        - Returns all history if dates not specified
+        - Reconstructs position history from deals
+        - Only includes fully closed positions
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:

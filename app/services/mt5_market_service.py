@@ -9,18 +9,41 @@ from ..models.market import Symbol, SymbolInfo, TickData, OHLC
 logger = logging.getLogger(__name__)
 
 class MT5MarketService:
+    """
+    Service for handling market data operations in MT5.
+    Provides functionality for retrieving symbols, prices, and historical data.
+    """
+    
     def __init__(self, base_service: MT5BaseService):
+        """
+        Initialize market service with base MT5 connection.
+        
+        Parameters:
+        - base_service: Base MT5 service for connection management
+        """
         self.base_service = base_service
 
     async def get_symbols(self) -> List[Symbol]:
-        """Get all available trading symbols"""
+        """
+        Get all available trading symbols from MT5.
+        
+        Returns:
+        - List[Symbol]: List of available symbols with their properties
+            - name: Symbol name (e.g., "EURUSD")
+            - description: Symbol description
+            - path: Symbol path in market watch
+            - point: Minimal price change
+            - digits: Price decimal places
+            
+        Note: Returns empty list if connection fails
+        """
         if not await self.base_service.ensure_connected():
             return []
             
         symbols = mt5.symbols_get()
         if symbols is None:
             return []
-        
+            
         result = []
         for symbol in symbols:
             result.append(Symbol(
@@ -34,7 +57,21 @@ class MT5MarketService:
         return result
 
     async def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
-        """Get detailed information about a symbol"""
+        """
+        Get detailed information about a specific symbol.
+        
+        Parameters:
+        - symbol: Symbol name to get info for (e.g., "EURUSD")
+        
+        Returns:
+        - SymbolInfo: Detailed symbol information including:
+            - Current bid/ask prices
+            - Spread
+            - Trading mode
+            - Allowed operations
+            - Volume limits
+        - None: If symbol not found or error occurs
+        """
         if not await self.base_service.ensure_connected():
             return None
         try:
@@ -58,7 +95,19 @@ class MT5MarketService:
             return None
 
     async def get_symbol_price(self, symbol: str) -> Optional[Dict[str, Decimal]]:
-        """Get current price for a symbol"""
+        """
+        Get current price information for a symbol.
+        
+        Parameters:
+        - symbol: Symbol name to get price for
+        
+        Returns:
+        - Dict with price information:
+            - bid: Current bid price
+            - ask: Current ask price
+            - last: Last trade price
+        - None: If price not available or error occurs
+        """
         if not await self.base_service.ensure_connected():
             return None
         try:
@@ -75,7 +124,21 @@ class MT5MarketService:
             return None
 
     async def get_symbol_ticks(self, symbol: str, count: int) -> List[TickData]:
-        """Get tick history for a symbol"""
+        """
+        Get historical tick data for a symbol.
+        
+        Parameters:
+        - symbol: Symbol name to get ticks for
+        - count: Number of ticks to retrieve
+        
+        Returns:
+        - List[TickData]: List of tick data with:
+            - time: Tick timestamp
+            - bid: Bid price
+            - ask: Ask price
+            - last: Last trade price
+            - volume: Trade volume
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:
@@ -94,7 +157,23 @@ class MT5MarketService:
             return []
 
     async def get_symbol_ohlc(self, symbol: str, timeframe: str, count: int) -> List[OHLC]:
-        """Get candlestick data"""
+        """
+        Get candlestick (OHLC) data for a symbol.
+        
+        Parameters:
+        - symbol: Symbol name to get candles for
+        - timeframe: Time period (M1, M5, M15, M30, H1, H4, D1)
+        - count: Number of candles to retrieve
+        
+        Returns:
+        - List[OHLC]: List of candlestick data with:
+            - time: Candle timestamp
+            - open: Opening price
+            - high: Highest price
+            - low: Lowest price
+            - close: Closing price
+            - volume: Trading volume
+        """
         if not await self.base_service.ensure_connected():
             return []
         try:
