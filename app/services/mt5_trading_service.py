@@ -1,88 +1,23 @@
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
+from decimal import Decimal
+from datetime import datetime
 import MetaTrader5 as mt5
 import logging
-from ..models.trade import TradeRequest, TradeResponse, OrderType, Position, AccountInfo
-from decimal import Decimal
-import asyncio
-from datetime import datetime
-from typing import List, Dict, Optional
+from .mt5_base_service import MT5BaseService
+from ..models.trade import (
+    TradeRequest, TradeResponse, Position, AccountInfo,
+    OrderType, ModifyTradeRequest
+)
 
 logger = logging.getLogger(__name__)
 
-class MT5Service:
-    def __init__(self):
-        self.initialized = False
-        self.login_info = None
-        self.reconnect_attempts = 3
-        self.reconnect_delay = 5
-        
-    async def connect(self, login: int, password: str, server: str) -> bool:
-        """
-        Connect to MT5 terminal
-        
-        Args:
-            login: MT5 account login
-            password: MT5 account password
-            server: MT5 server name
-            
-        Returns:
-            bool: True if connection successful, False otherwise
-        """
-        self.login_info = {
-            "login": login,
-            "password": password,
-            "server": server
-        }
-        
-        return await self._connect()
-    
-    async def _connect(self) -> bool:
-        """Internal connection method with retry logic"""
-        if not self.login_info:
-            logger.error("No login information available")
-            return False
-            
-        for attempt in range(self.reconnect_attempts):
-            try:
-                if self.initialized:
-                    return True
-                
-                if not mt5.initialize():
-                    logger.error("MT5 initialization failed")
-                    if attempt < self.reconnect_attempts - 1:
-                        await asyncio.sleep(self.reconnect_delay)
-                        continue
-                    return False
-                
-                login_result = mt5.login(
-                    login=self.login_info["login"],
-                    password=self.login_info["password"],
-                    server=self.login_info["server"]
-                )
-                
-                if login_result:
-                    self.initialized = True
-                    logger.info(f"Connected to MT5 server: {self.login_info['server']}")
-                    return True
-                    
-                logger.error(f"MT5 login failed, attempt {attempt + 1}/{self.reconnect_attempts}")
-                
-                if attempt < self.reconnect_attempts - 1:
-                    await asyncio.sleep(self.reconnect_delay)
-                    
-            except Exception as e:
-                logger.error(f"MT5 connection error: {str(e)}")
-                if attempt < self.reconnect_attempts - 1:
-                    await asyncio.sleep(self.reconnect_delay)
-                    
-        return False
+class MT5TradingService:
+    def __init__(self, base_service: MT5BaseService):
+        self.base_service = base_service
 
-    async def ensure_connected(self) -> bool:
-        """Ensure MT5 connection is active, reconnect if necessary"""
-        if not self.initialized:
-            logger.info("MT5 not initialized, attempting to reconnect")
-            return await self._connect()
-        return True
+    @property
+    def initialized(self):
+        return self.base_service.initialized
 
     def _prepare_trade_request(self, trade_request: TradeRequest) -> Dict[str, Any]:
         """Prepare trade request parameters for MT5"""
@@ -112,9 +47,9 @@ class MT5Service:
             
         return request
 
-    async def place_order(self, trade_request: TradeRequest) -> TradeResponse:
-        """Place a trading order in MT5"""
-        if not await self.ensure_connected():
+    async def execute_trade(self, trade_request: TradeRequest) -> TradeResponse:
+        """Execute a market order"""
+        if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,
                 status="error",
@@ -142,28 +77,15 @@ class MT5Service:
 
         except Exception as e:
             logger.error(f"Error placing order: {str(e)}")
-            self.initialized = False
             return TradeResponse(
                 order_id=0,
                 status="error",
                 message=str(e)
             )
 
-    async def shutdown(self):
-        """Shutdown MT5 connection"""
-        if self.initialized:
-            mt5.shutdown()
-            self.initialized = False
-            logger.info("MT5 connection closed")
-
-    def __del__(self):
-        """Cleanup when service is destroyed"""
-        if self.initialized:
-            mt5.shutdown()
-
     async def get_positions(self) -> List[Position]:
         """Get all open positions"""
-        if not await self.ensure_connected():
+        if not await self.base_service.ensure_connected():
             return []
             
         try:
@@ -192,7 +114,7 @@ class MT5Service:
 
     async def get_account_info(self) -> Optional[AccountInfo]:
         """Get account information"""
-        if not await self.ensure_connected():
+        if not await self.base_service.ensure_connected():
             return None
             
         try:
@@ -214,7 +136,7 @@ class MT5Service:
 
     async def close_position(self, ticket: int) -> TradeResponse:
         """Close specific position by ticket"""
-        if not await self.ensure_connected():
+        if not await self.base_service.ensure_connected():
             return TradeResponse(
                 order_id=0,
                 status="error",
@@ -266,3 +188,56 @@ class MT5Service:
                 status="error",
                 message=str(e)
             )
+
+    async def modify_trade_levels(self, ticket: int, modify_request: ModifyTradeRequest) -> TradeResponse:
+        """Modify trade's SL/TP levels"""
+        if not await self.base_service.ensure_connected():
+            return TradeResponse(
+                order_id=0,
+                status="error",
+                message="Failed to connect to MT5"
+            )
+            
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                return TradeResponse(
+                    order_id=0,
+                    status="error",
+                    message=f"Position {ticket} not found"
+                )
+                
+            position = position[0]
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": ticket,
+                "symbol": position.symbol,
+            }
+            
+            # Only include SL/TP if they are provided
+            if modify_request.stop_loss is not None:
+                request["sl"] = float(modify_request.stop_loss)
+            if modify_request.take_profit is not None:
+                request["tp"] = float(modify_request.take_profit)
+            
+            result = mt5.order_send(request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                return TradeResponse(
+                    order_id=0,
+                    status="error",
+                    message=f"Failed to modify trade levels: {result.comment}"
+                )
+                
+            return TradeResponse(
+                order_id=ticket,
+                status="success",
+                message="Trade levels modified successfully"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error modifying trade levels: {str(e)}")
+            return TradeResponse(
+                order_id=0,
+                status="error",
+                message=str(e)
+            ) 

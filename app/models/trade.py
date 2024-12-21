@@ -53,3 +53,60 @@ class TradeResponse(BaseModel):
     order_id: int = Field(..., description="Order ID from MT5")
     status: str = Field(..., description="Order status (success/error)")
     message: str = Field(..., description="Detailed message") 
+
+class PendingOrder(BaseModel):
+    ticket: int
+    symbol: str
+    type: str
+    volume: Decimal
+    price: Decimal
+    stop_loss: Optional[Decimal]
+    take_profit: Optional[Decimal]
+    comment: Optional[str]
+
+class HistoricalOrder(BaseModel):
+    ticket: int
+    symbol: str
+    type: str
+    volume: Decimal
+    price: Decimal
+    time: datetime
+    state: str
+    profit: Decimal
+
+class HistoricalDeal(BaseModel):
+    ticket: int
+    order_ticket: int
+    symbol: str
+    type: str
+    volume: Decimal
+    price: Decimal
+    time: datetime
+    profit: Decimal
+
+class HistoricalPosition(BaseModel):
+    ticket: int
+    symbol: str
+    type: str
+    volume: Decimal
+    open_price: Decimal
+    close_price: Decimal
+    open_time: datetime
+    close_time: datetime
+    profit: Decimal
+
+class ModifyPositionRequest(BaseModel):
+    stop_loss: Optional[Decimal]
+    take_profit: Optional[Decimal] 
+
+class ModifyTradeRequest(BaseModel):
+    stop_loss: Optional[Decimal] = Field(None, description="New stop loss level")
+    take_profit: Optional[Decimal] = Field(None, description="New take profit level")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "stop_loss": 1.0800,
+                "take_profit": 1.0900
+            }
+        }
