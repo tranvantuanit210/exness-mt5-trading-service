@@ -1,74 +1,61 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
-from ..services.mt5_position_service import MT5PositionService
-from ..models.trade import TradeResponse, ModifyPositionRequest
+from ..services.mt5_risk_service import MT5RiskService
+from ..models.risk_management import (
+    PositionSizeRequest, PositionSizeResponse,
+    TrailingStopRequest, PortfolioRiskRequest, PortfolioRiskResponse
+)
 
-def get_router(service: MT5PositionService) -> APIRouter:
+def get_router(service: MT5RiskService) -> APIRouter:
     router = APIRouter(prefix="/risk", tags=["Risk Management"])
 
-    @router.post("/positions/{ticket}/modify",
-        response_model=TradeResponse,
-        summary="Modify Position Levels",
-        description="Modify Stop Loss and Take Profit levels for an existing position")
-    async def modify_position(
-        ticket: int,
-        modify_request: ModifyPositionRequest
-    ):
+    @router.post("/position-size",
+        response_model=PositionSizeResponse,
+        summary="Calculate Position Size",
+        description="Calculate optimal position size based on risk parameters")
+    async def calculate_position_size(request: PositionSizeRequest):
         """
-        Modify risk management levels for a position:
-        - Update Stop Loss level
-        - Update Take Profit level
-        
-        Parameters:
-        - ticket: Position ticket number
-        - modify_request: New SL/TP levels
-        
-        Returns:
-        - Success confirmation if modified
-        - Error message if modification failed
+        Calculate optimal position size based on:
+        - Account risk percentage
+        - Entry price
+        - Stop loss level
+        - Symbol specifications
         """
-        result = await service.modify_position(ticket, modify_request)
-        if result.status == "error":
-            raise HTTPException(status_code=400, detail=result.message)
-        return result
+        try:
+            return await service.calculate_position_size(request)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/positions/close-all",
-        response_model=List[TradeResponse],
-        summary="Close All Positions",
-        description="Close all currently open positions in the trading account")
-    async def close_all_positions():
+    @router.post("/trailing-stop",
+        summary="Manage Trailing Stop",
+        description="Set or update trailing stop loss for a position")
+    async def manage_trailing_stop(request: TrailingStopRequest):
         """
-        Close all open positions:
-        - Attempts to close every open position
-        - Returns results for each position
-        
-        Returns:
-        - List of results for each position closure
-        - Success/failure status for each position
-        - Error messages for failed closures
+        Manage trailing stop loss with:
+        - Trail distance
+        - Optional step size
+        - Position ticket
         """
-        return await service.close_all_positions()
+        result = await service.manage_trailing_stop(request)
+        if not result:
+            raise HTTPException(status_code=400, detail="Failed to update trailing stop")
+        return {"status": "success", "message": "Trailing stop updated"}
 
-    @router.post("/positions/hedge/{ticket}",
-        response_model=TradeResponse,
-        summary="Create Hedge Position",
-        description="Create a hedging position against an existing position")
-    async def create_hedge_position(ticket: int):
+    @router.post("/portfolio-risk",
+        response_model=PortfolioRiskResponse,
+        summary="Analyze Portfolio Risk",
+        description="Analyze total portfolio risk and position correlations")
+    async def analyze_portfolio_risk(request: PortfolioRiskRequest):
         """
-        Create a hedge position:
-        - Opens opposite position with same volume
-        - Helps to lock in current profit/loss
-        
-        Parameters:
-        - ticket: Original position ticket to hedge against
-        
-        Returns:
-        - New hedge position details if successful
-        - Error message if hedging failed
+        Analyze portfolio risk including:
+        - Total risk exposure
+        - Individual position risks
+        - Correlated positions
+        - Risk status assessment
         """
-        result = await service.create_hedge_position(ticket)
-        if result.status == "error":
-            raise HTTPException(status_code=400, detail=result.message)
-        return result
+        try:
+            return await service.analyze_portfolio_risk(request)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     return router 

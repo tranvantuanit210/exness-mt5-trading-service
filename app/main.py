@@ -6,7 +6,7 @@ import logging
 import uvicorn
 from contextlib import asynccontextmanager
 
-from app.routers import market_info, orders, history, risk_management, trading, account
+from app.routers import market_info, orders, history, position, risk_management, trading, account
 from app.services.mt5_base_service import MT5BaseService
 from app.services.mt5_trading_service import MT5TradingService
 from app.services.mt5_market_service import MT5MarketService
@@ -14,6 +14,7 @@ from app.services.mt5_order_service import MT5OrderService
 from app.services.mt5_position_service import MT5PositionService
 from app.services.mt5_history_service import MT5HistoryService
 from app.services.mt5_account_service import MT5AccountService
+from app.services.mt5_risk_service import MT5RiskService
 
 # Initialize services with shared MT5 connection
 mt5_base_service = MT5BaseService()
@@ -25,6 +26,7 @@ mt5_order_service = MT5OrderService(mt5_base_service)
 mt5_position_service = MT5PositionService(mt5_base_service)
 mt5_history_service = MT5HistoryService(mt5_base_service)
 mt5_account_service = MT5AccountService(mt5_base_service)
+mt5_risk_service = MT5RiskService(mt5_base_service)
 
 # Configure logging
 logging.basicConfig(
@@ -104,10 +106,13 @@ app.include_router(
     history.get_router(mt5_history_service)
 )
 app.include_router(
-    risk_management.get_router(mt5_position_service)
+    position.get_router(mt5_position_service)
 )
 app.include_router(
     account.get_router(mt5_account_service)
+)
+app.include_router(
+    risk_management.get_router(mt5_risk_service)
 )
 
 def main():
