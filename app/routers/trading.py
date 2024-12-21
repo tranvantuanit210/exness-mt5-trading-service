@@ -5,7 +5,7 @@ from ..models.trade import TradeRequest, TradeResponse
 def get_router(service: MT5TradingService) -> APIRouter:
     router = APIRouter(prefix="/trading", tags=["Basic Trading"])
 
-    @router.post("/execute",
+    @router.post("/market-order",
         response_model=TradeResponse,
         summary="Execute Market Order",
         description="Execute an immediate market order for buying or selling")
@@ -27,7 +27,7 @@ def get_router(service: MT5TradingService) -> APIRouter:
         - Error message if execution failed
         """
         try:
-            result = await service.execute_trade(trade_request)
+            result = await service.execute_market_order(trade_request)
             if result.status == "error":
                 raise HTTPException(status_code=400, detail=result.message)
             return result

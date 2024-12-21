@@ -35,20 +35,42 @@ class AccountInfo(BaseModel):
     margin_so_mode: int = Field(..., description="Margin SO mode")
 
 class TradeRequest(BaseModel):
-    symbol: str = Field(..., description="Trading symbol (e.g., EURUSD)")
-    order_type: OrderType = Field(..., description="Order type (BUY/SELL)")
-    volume: Decimal = Field(..., gt=0, description="Trading volume")
-    stop_loss: Optional[Decimal] = Field(None, description="Stop loss level")
-    take_profit: Optional[Decimal] = Field(None, description="Take profit level")
+    symbol: str = Field(
+        ..., 
+        description="Trading symbol (e.g., EURUSD, XAUUSD, BTCUSD)"
+    )
+    order_type: OrderType = Field(
+        ..., 
+        description="Order type (BUY: open buy position, SELL: open sell position)"
+    )
+    amount: float = Field(
+        ..., 
+        description="Investment amount in deposit currency (e.g., 1000 USD)",
+        gt=0
+    )
+    stop_loss: Optional[float] = Field(
+        None, 
+        description="Stop loss price level. Leave empty for no stop loss"
+    )
+    take_profit: Optional[float] = Field(
+        None, 
+        description="Take profit price level. Leave empty for no take profit"
+    )
+    comment: Optional[str] = Field(
+        None, 
+        description="Order comment or note",
+        max_length=100
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "symbol": "EURUSD",
                 "order_type": "BUY",
-                "volume": 0.1,
+                "amount": 1000,
                 "stop_loss": 1.0800,
-                "take_profit": 1.0900
+                "take_profit": 1.0900,
+                "comment": "Python trading bot order"
             }
         }
 
