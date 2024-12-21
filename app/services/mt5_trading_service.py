@@ -1,13 +1,13 @@
-from typing import List, Optional, Dict, Any
-from decimal import Decimal
-from datetime import datetime
+from typing import Dict, Any
 import MetaTrader5 as mt5
 import logging
 from .mt5_base_service import MT5BaseService
 from ..models.trade import (
-    TradeRequest, TradeResponse, Position, AccountInfo,
-    OrderType, ModifyTradeRequest
+    TradeRequest, TradeResponse, OrderType
 )
+from tenacity import retry, stop_after_attempt, wait_exponential
+import asyncio
+from ..utils.retry_helper import handle_retry_error
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,9 @@ class MT5TradingService:
     Service for handling trading operations in MT5.
     Provides functionality for executing trades, managing positions and account information.
     """
+    # Class constants
+    MAX_RETRIES = 3
+    VERIFICATION_WAIT_TIME = 1.0  # seconds
 
     def __init__(self, base_service: MT5BaseService):
         """
@@ -25,6 +28,7 @@ class MT5TradingService:
         - base_service: Base MT5 service for connection management
         """
         self.base_service = base_service
+        self.max_retries = self.MAX_RETRIES  # Using class constant
 
     @property
     def initialized(self):
@@ -70,23 +74,14 @@ class MT5TradingService:
             
         return request
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+    )
     async def execute_trade(self, trade_request: TradeRequest) -> TradeResponse:
         """
-        Execute a market order with specified parameters.
-        
-        Parameters:
-        - trade_request: Trade request containing:
-            - Symbol to trade
-            - Order type (buy/sell)
-            - Volume
-            - Optional stop loss
-            - Optional take profit
-        
-        Returns:
-        - TradeResponse with:
-            - order_id: Executed order ticket (0 if failed)
-            - status: 'success' or 'error'
-            - message: Success/error details
+        Execute a market order with verification steps
         """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
@@ -96,7 +91,10 @@ class MT5TradingService:
             )
 
         try:
+            # 1. Prepare trade request
             request = self._prepare_trade_request(trade_request)
+            
+            # 2. Execute the trade
             result = mt5.order_send(request)
             
             if result.retcode != mt5.TRADE_RETCODE_DONE:
@@ -107,11 +105,21 @@ class MT5TradingService:
                     message=f"Order failed: {result.comment}"
                 )
 
-            logger.info(f"Order placed successfully: Order ID {result.order}")
+            # 3. Verify trade result
+            verified = await self._verify_trade_result(result, trade_request)
+            if not verified:
+                logger.error("Trade verification failed")
+                return TradeResponse(
+                    order_id=0, 
+                    status="error",
+                    message="Trade verification failed"
+                )
+
+            logger.info(f"Order placed and verified successfully: Order ID {result.order}")
             return TradeResponse(
                 order_id=result.order,
                 status="success",
-                message="Order placed successfully"
+                message="Order placed and verified successfully"
             )
 
         except Exception as e:
@@ -122,173 +130,51 @@ class MT5TradingService:
                 message=str(e)
             )
 
-    async def get_positions(self) -> List[Position]:
+    async def _verify_trade_result(self, result: mt5.OrderSendResult, original_request: TradeRequest) -> bool:
         """
-        Get all currently open positions.
-        
-        Returns:
-        - List[Position]: List of open positions with details:
-            - Ticket number
-            - Symbol
-            - Type (buy/sell)
-            - Volume
-            - Open price
-            - Stop loss
-            - Take profit
-            - Current profit
-            - Open time
-        """
-        if not await self.base_service.ensure_connected():
-            return []
-            
-        try:
-            positions = mt5.positions_get()
-            if positions is None:
-                return []
-                
-            result = []
-            for pos in positions:
-                result.append(Position(
-                    ticket=pos.ticket,
-                    symbol=pos.symbol,
-                    order_type=OrderType.BUY if pos.type == mt5.ORDER_TYPE_BUY else OrderType.SELL,
-                    volume=Decimal(str(pos.volume)),
-                    open_price=Decimal(str(pos.price_open)),
-                    stop_loss=Decimal(str(pos.sl)) if pos.sl else None,
-                    take_profit=Decimal(str(pos.tp)) if pos.tp else None,
-                    profit=Decimal(str(pos.profit)),
-                    open_time=datetime.fromtimestamp(pos.time)
-                ))
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error getting positions: {str(e)}")
-            return []
+        Verify trade execution by:
+        1. Check if the order exists
+        2. Compare important parameters
+        3. Verify order status
 
-    async def close_position(self, ticket: int) -> TradeResponse:
-        """
-        Close a specific position by its ticket number.
-        
-        Parameters:
-        - ticket: Position ticket to close
-        
+        Args:
+            result: The result from MT5 order_send
+            original_request: The original trade request for comparison
+
         Returns:
-        - TradeResponse with:
-            - order_id: Closure order ticket
-            - status: Success/error
-            - message: Closure details
+            bool: True if verification passes, False otherwise
         """
-        if not await self.base_service.ensure_connected():
-            return TradeResponse(
-                order_id=0,
-                status="error",
-                message="Failed to connect to MT5"
-            )
-            
         try:
-            position = mt5.positions_get(ticket=ticket)
+            # Wait briefly to ensure order processing
+            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            
+            # Get the newly created position
+            position = mt5.positions_get(ticket=result.order)
             if not position:
-                return TradeResponse(
-                    order_id=0,
-                    status="error",
-                    message=f"Position {ticket} not found"
-                )
+                logger.error(f"Cannot find position with ticket {result.order}")
+                return False
                 
             position = position[0]
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "position": ticket,
-                "symbol": position.symbol,
-                "volume": float(position.volume),
-                "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
-                "price": mt5.symbol_info_tick(position.symbol).bid if position.type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(position.symbol).ask,
-                "deviation": 20,
-                "magic": 234000,
-                "comment": "python script close",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
             
-            result = mt5.order_send(request)
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                return TradeResponse(
-                    order_id=0,
-                    status="error",
-                    message=f"Failed to close position: {result.comment}"
-                )
+            # Verify critical parameters
+            if (position.symbol != original_request.symbol or
+                position.volume != float(original_request.volume) or
+                (position.type == mt5.ORDER_TYPE_BUY and original_request.order_type != OrderType.BUY) or
+                (position.type == mt5.ORDER_TYPE_SELL and original_request.order_type != OrderType.SELL)):
+                logger.error("Trade parameters mismatch")
+                return False
                 
-            return TradeResponse(
-                order_id=result.order,
-                status="success",
-                message="Position closed successfully"
-            )
-            
-        except Exception as e:
-            logger.error(f"Error closing position: {str(e)}")
-            return TradeResponse(
-                order_id=0,
-                status="error",
-                message=str(e)
-            )
+            # Verify SL/TP if specified
+            if original_request.stop_loss and position.sl != float(original_request.stop_loss):
+                logger.error("Stop Loss mismatch")
+                return False
+                
+            if original_request.take_profit and position.tp != float(original_request.take_profit):
+                logger.error("Take Profit mismatch")
+                return False
 
-    async def modify_trade_levels(self, ticket: int, modify_request: ModifyTradeRequest) -> TradeResponse:
-        """
-        Modify stop loss and take profit levels for an open position.
-        
-        Parameters:
-        - ticket: Position ticket to modify
-        - modify_request: New SL/TP levels
-        
-        Returns:
-        - TradeResponse with modification result
-        """
-        if not await self.base_service.ensure_connected():
-            return TradeResponse(
-                order_id=0,
-                status="error",
-                message="Failed to connect to MT5"
-            )
-            
-        try:
-            position = mt5.positions_get(ticket=ticket)
-            if not position:
-                return TradeResponse(
-                    order_id=0,
-                    status="error",
-                    message=f"Position {ticket} not found"
-                )
-                
-            position = position[0]
-            request = {
-                "action": mt5.TRADE_ACTION_SLTP,
-                "position": ticket,
-                "symbol": position.symbol,
-            }
-            
-            # Only include SL/TP if they are provided
-            if modify_request.stop_loss is not None:
-                request["sl"] = float(modify_request.stop_loss)
-            if modify_request.take_profit is not None:
-                request["tp"] = float(modify_request.take_profit)
-            
-            result = mt5.order_send(request)
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                return TradeResponse(
-                    order_id=0,
-                    status="error",
-                    message=f"Failed to modify trade levels: {result.comment}"
-                )
-                
-            return TradeResponse(
-                order_id=ticket,
-                status="success",
-                message="Trade levels modified successfully"
-            )
-            
+            return True
+
         except Exception as e:
-            logger.error(f"Error modifying trade levels: {str(e)}")
-            return TradeResponse(
-                order_id=0,
-                status="error",
-                message=str(e)
-            ) 
+            logger.error(f"Error during trade verification: {str(e)}")
+            return False 

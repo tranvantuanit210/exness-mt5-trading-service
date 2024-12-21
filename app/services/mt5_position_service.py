@@ -5,6 +5,9 @@ import MetaTrader5 as mt5
 import logging
 from .mt5_base_service import MT5BaseService
 from ..models.trade import Position, TradeResponse, ModifyPositionRequest, OrderType
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential
+from ..utils.retry_helper import handle_retry_error
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,12 @@ class MT5PositionService:
     including risk management operations like hedging.
     """
 
+    # Class constants
+    MAX_RETRIES = 3
+    VERIFICATION_WAIT_TIME = 1.0  # seconds
+    TRADE_DEVIATION = 20
+    TRADE_MAGIC = 234000
+
     def __init__(self, base_service: MT5BaseService):
         """
         Initialize position service with base MT5 connection.
@@ -23,7 +32,8 @@ class MT5PositionService:
         - base_service: Base MT5 service for connection management
         """
         self.base_service = base_service
-
+        self.max_retries = self.MAX_RETRIES
+        
     async def get_positions(self) -> List[Position]:
         """
         Get all currently open positions.
@@ -69,23 +79,21 @@ class MT5PositionService:
             logger.error(f"Error getting positions: {str(e)}")
             return []
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+    )
     async def modify_position(self, ticket: int, modify_request: ModifyPositionRequest) -> TradeResponse:
         """
-        Modify Stop Loss and Take Profit levels for an existing position.
+        Modify Stop Loss and Take Profit levels with verification and retry mechanism
         
         Parameters:
         - ticket: Position ticket to modify
-        - modify_request: New SL/TP levels containing:
-            - stop_loss: New Stop Loss price (optional)
-            - take_profit: New Take Profit price (optional)
+        - modify_request: New SL/TP levels
         
         Returns:
-        - TradeResponse with:
-            - order_id: Modified position ticket (0 if failed)
-            - status: Success/error status
-            - message: Modification details or error message
-            
-        Note: Only provided levels will be modified, others remain unchanged
+        - TradeResponse with modification result
         """
         if not await self.base_service.ensure_connected():
             return TradeResponse(order_id=0, status="error", message="Not connected to MT5")
@@ -114,19 +122,33 @@ class MT5PositionService:
                     status="error",
                     message=f"Failed to modify position: {result.comment}"
                 )
+
+            # Add verification
+            verified = await self._verify_position_modification(ticket, modify_request)
+            if not verified:
+                return TradeResponse(
+                    order_id=0,
+                    status="error",
+                    message="Position modification verification failed"
+                )
             
             return TradeResponse(
                 order_id=ticket,
                 status="success",
-                message="Position modified successfully"
+                message="Position modified and verified successfully"
             )
         except Exception as e:
             logger.error(f"Error modifying position: {str(e)}")
             return TradeResponse(order_id=0, status="error", message=str(e))
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry_error_callback=lambda retry_state: handle_retry_error(retry_state, max_retries=3)
+    )
     async def close_position(self, ticket: int) -> TradeResponse:
         """
-        Close a specific position by its ticket number.
+        Close a specific position with verification and retry mechanism
         
         Parameters:
         - ticket: Position ticket to close
@@ -136,8 +158,6 @@ class MT5PositionService:
             - order_id: Closure order ticket (0 if failed)
             - status: Success/error status
             - message: Closure details or error message
-            
-        Note: Closes entire position volume at current market price
         """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
@@ -163,8 +183,8 @@ class MT5PositionService:
                 "volume": float(position.volume),
                 "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
                 "price": mt5.symbol_info_tick(position.symbol).bid if position.type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(position.symbol).ask,
-                "deviation": 20,
-                "magic": 234000,
+                "deviation": self.TRADE_DEVIATION,
+                "magic": self.TRADE_MAGIC,
                 "comment": "python script close",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
@@ -177,11 +197,20 @@ class MT5PositionService:
                     status="error",
                     message=f"Failed to close position: {result.comment}"
                 )
+
+            # Add verification
+            verified = await self._verify_position_closure(ticket)
+            if not verified:
+                return TradeResponse(
+                    order_id=0,
+                    status="error",
+                    message="Position closure verification failed"
+                )
                 
             return TradeResponse(
                 order_id=result.order,
                 status="success",
-                message="Position closed successfully"
+                message="Position closed and verified successfully"
             )
             
         except Exception as e:
@@ -273,3 +302,40 @@ class MT5PositionService:
         except Exception as e:
             logger.error(f"Error creating hedge position: {str(e)}")
             return TradeResponse(order_id=0, status="error", message=str(e)) 
+
+    async def _verify_position_closure(self, ticket: int) -> bool:
+        """
+        Verify that a position has been properly closed
+        """
+        try:
+            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            position = mt5.positions_get(ticket=ticket)
+            if position:
+                logger.error(f"Position {ticket} still exists after closure attempt")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying position closure: {str(e)}")
+            return False
+
+    async def _verify_position_modification(self, ticket: int, modify_request: ModifyPositionRequest) -> bool:
+        """
+        Verify that position levels were properly modified
+        """
+        try:
+            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                logger.error(f"Cannot find position with ticket {ticket}")
+                return False
+            position = position[0]
+            if modify_request.stop_loss and position.sl != float(modify_request.stop_loss):
+                logger.error("Stop Loss modification mismatch")
+                return False
+            if modify_request.take_profit and position.tp != float(modify_request.take_profit):
+                logger.error("Take Profit modification mismatch")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying position modification: {str(e)}")
+            return False 

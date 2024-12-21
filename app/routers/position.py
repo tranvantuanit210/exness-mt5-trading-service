@@ -1,10 +1,53 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from ..services.mt5_position_service import MT5PositionService
-from ..models.trade import TradeResponse, ModifyPositionRequest
+from ..models.trade import TradeResponse, Position, ModifyPositionRequest
 
-def get_router(service: MT5PositionService) -> APIRouter:
-    router = APIRouter(prefix="/positions", tags=["Position"])
+def get_router(position_service: MT5PositionService) -> APIRouter:
+    router = APIRouter(prefix="/positions", tags=["Position Management"])
+
+    @router.get("/",
+        response_model=List[Position],
+        summary="Get Open Positions",
+        description="Retrieve all currently open positions in the trading account")
+    async def get_positions():
+        """
+        Get all open positions with details:
+        - Position ticket
+        - Symbol
+        - Type (long/short)
+        - Volume
+        - Open price
+        - Current price
+        - Stop Loss
+        - Take Profit
+        - Swap
+        - Profit/Loss
+        - Comment
+        """
+        return await position_service.get_positions()
+
+    @router.delete("/{ticket}",
+        response_model=TradeResponse,
+        summary="Close Position",
+        description="Close a specific open position by its ticket number")
+    async def close_position(ticket: int):
+        """
+        Close an open position:
+        - Closes entire position volume
+        - Calculates final profit/loss
+        
+        Parameters:
+        - ticket: Position ticket to close
+        
+        Returns:
+        - Closure confirmation and P/L if successful
+        - Error message if closure failed
+        """
+        result = await position_service.close_position(ticket)
+        if result.status == "error":
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
 
     @router.post("/{ticket}/modify",
         response_model=TradeResponse,
@@ -27,7 +70,7 @@ def get_router(service: MT5PositionService) -> APIRouter:
         - Success confirmation if modified
         - Error message if modification failed
         """
-        result = await service.modify_position(ticket, modify_request)
+        result = await position_service.modify_position(ticket, modify_request)
         if result.status == "error":
             raise HTTPException(status_code=400, detail=result.message)
         return result
@@ -47,7 +90,7 @@ def get_router(service: MT5PositionService) -> APIRouter:
         - Success/failure status for each position
         - Error messages for failed closures
         """
-        return await service.close_all_positions()
+        return await position_service.close_all_positions()
 
     @router.post("/hedge/{ticket}",
         response_model=TradeResponse,
@@ -66,7 +109,7 @@ def get_router(service: MT5PositionService) -> APIRouter:
         - New hedge position details if successful
         - Error message if hedging failed
         """
-        result = await service.create_hedge_position(ticket)
+        result = await position_service.create_hedge_position(ticket)
         if result.status == "error":
             raise HTTPException(status_code=400, detail=result.message)
         return result
