@@ -5,7 +5,7 @@ from ..services.mt5_reporting_service import MT5ReportingService
 from ..models.reporting import TradeStats, PairAnalysis, DrawdownInfo, PeriodicReport
 
 def get_router(reporting_service: MT5ReportingService) -> APIRouter:
-    router = APIRouter(prefix="/reporting", tags=["reporting"])
+    router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
     @router.get("/performance", response_model=TradeStats)
     async def get_performance_stats(

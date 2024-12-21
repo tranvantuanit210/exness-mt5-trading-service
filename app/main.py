@@ -101,7 +101,8 @@ app.add_middleware(
 
 @app.get("/health",
          summary="Check status",
-         description="Check MT5 connection status")
+         description="Check MT5 connection status",
+         tags=["Health Check"])
 async def health_check():
     """Check connection status endpoint"""
     return {
