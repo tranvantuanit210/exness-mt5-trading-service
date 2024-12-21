@@ -1,8 +1,6 @@
 import logging
 import aiohttp
-import smtplib
-from email.mime.text import MIMEText
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from datetime import datetime
 import asyncio
