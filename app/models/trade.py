@@ -71,8 +71,8 @@ class HistoricalOrder(BaseModel):
     volume: Decimal
     price: Decimal
     time: datetime
-    state: str
-    profit: Decimal
+    state: int
+    profit: Optional[Decimal] = None
 
 class HistoricalDeal(BaseModel):
     ticket: int

@@ -57,12 +57,12 @@ class MT5HistoryService:
                 HistoricalOrder(
                     ticket=order.ticket,
                     symbol=order.symbol,
-                    type=order.type,
+                    type="buy" if order.type == mt5.ORDER_TYPE_BUY else "sell",
                     volume=Decimal(str(order.volume_current)),
                     price=Decimal(str(order.price_open)),
                     time=datetime.fromtimestamp(order.time_setup),
                     state=order.state,
-                    profit=Decimal(str(order.profit))
+                    profit=Decimal(str(order.profit)) if hasattr(order, 'profit') and order.profit is not None else None
                 ) for order in orders
             ] if orders else []
         except Exception as e:
@@ -103,7 +103,7 @@ class MT5HistoryService:
                     ticket=deal.ticket,
                     order_ticket=deal.order,
                     symbol=deal.symbol,
-                    type=deal.type,
+                    type="buy" if deal.type == mt5.ORDER_TYPE_BUY else "sell",
                     volume=Decimal(str(deal.volume)),
                     price=Decimal(str(deal.price)),
                     time=datetime.fromtimestamp(deal.time),
@@ -157,7 +157,7 @@ class MT5HistoryService:
                     positions[deal.position_id] = {
                         "ticket": deal.position_id,
                         "symbol": deal.symbol,
-                        "type": deal.type,
+                        "type": "buy" if deal.type == mt5.ORDER_TYPE_BUY else "sell",
                         "volume": Decimal(str(deal.volume)),
                         "open_price": Decimal(str(deal.price)),
                         "open_time": datetime.fromtimestamp(deal.time),
