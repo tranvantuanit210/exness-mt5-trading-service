@@ -56,29 +56,6 @@ def get_router(service: MT5TradingService) -> APIRouter:
         """
         return await service.get_positions()
 
-    @router.get("/account",
-        response_model=Optional[AccountInfo],
-        summary="Get Account Information",
-        description="Retrieve detailed trading account information and balance")
-    async def get_account_info():
-        """
-        Get account information including:
-        - Account number
-        - Balance
-        - Equity
-        - Margin
-        - Free margin
-        - Margin level
-        - Leverage
-        - Currency
-        - Server name
-        - Company
-        """
-        info = await service.get_account_info()
-        if info is None:
-            raise HTTPException(status_code=500, detail="Failed to get account info")
-        return info
-
     @router.delete("/positions/{ticket}",
         response_model=TradeResponse,
         summary="Close Position",
@@ -97,30 +74,6 @@ def get_router(service: MT5TradingService) -> APIRouter:
         - Error message if closure failed
         """
         result = await service.close_position(ticket)
-        if result.status == "error":
-            raise HTTPException(status_code=400, detail=result.message)
-        return result
-
-    @router.put("/positions/{ticket}/levels",
-        response_model=TradeResponse,
-        summary="Modify Trade Levels",
-        description="Update Stop Loss and Take Profit levels for an open position")
-    async def modify_trade_levels(ticket: int, modify_request: ModifyTradeRequest):
-        """
-        Modify trade's SL/TP levels:
-        - Update Stop Loss level
-        - Update Take Profit level
-        - Both levels are optional
-        
-        Parameters:
-        - ticket: Position ticket to modify
-        - modify_request: New SL/TP levels
-        
-        Returns:
-        - Modification confirmation if successful
-        - Error message if modification failed
-        """
-        result = await service.modify_trade_levels(ticket, modify_request)
         if result.status == "error":
             raise HTTPException(status_code=400, detail=result.message)
         return result
