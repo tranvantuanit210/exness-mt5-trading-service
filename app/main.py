@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.models.notification import NotificationConfig
 
-from app.routers import market_info, orders, history, position, risk_management, trading, account, notification
+from app.routers import market_info, orders, history, position, risk_management, trading, account, notification, automation
 from app.services.mt5_base_service import MT5BaseService
 from app.services.mt5_trading_service import MT5TradingService
 from app.services.mt5_market_service import MT5MarketService
@@ -17,6 +17,7 @@ from app.services.mt5_history_service import MT5HistoryService
 from app.services.mt5_account_service import MT5AccountService
 from app.services.mt5_risk_service import MT5RiskService
 from app.services.mt5_notification_service import MT5NotificationService
+from app.services.mt5_automation_service import MT5AutomationService
 
 # Initialize services with shared MT5 connection
 mt5_base_service = MT5BaseService()
@@ -30,6 +31,7 @@ mt5_history_service = MT5HistoryService(mt5_base_service)
 mt5_account_service = MT5AccountService(mt5_base_service)
 mt5_risk_service = MT5RiskService(mt5_base_service)
 mt5_notification_service = MT5NotificationService(mt5_base_service)
+mt5_automation_service = MT5AutomationService(mt5_base_service)
 
 # Configure logging
 logging.basicConfig(
@@ -63,6 +65,9 @@ async def lifespan(app: FastAPI):
         await mt5_notification_service.initialize(notification_config)
         logger.info("Notification service initialized")
         
+        # Start automation tasks
+        await mt5_automation_service.start_automation()
+        
     except Exception as e:
         logger.error(f"Startup error: {str(e)}")
         raise
@@ -72,6 +77,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: Cleanup MT5 connection
     if mt5_base_service.initialized:
         logger.info("Shutting down MT5 connection")
+        await mt5_automation_service.stop_automation()
         await mt5_base_service.shutdown()
 
 # Initialize FastAPI with lifespan
@@ -125,6 +131,9 @@ app.include_router(
 )
 app.include_router(
     notification.get_router(mt5_notification_service)
+)
+app.include_router(
+    automation.get_router(mt5_automation_service)
 )
 
 def main():
