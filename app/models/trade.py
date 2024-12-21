@@ -30,6 +30,14 @@ class AccountInfo(BaseModel):
     margin: Decimal = Field(..., description="Used margin")
     free_margin: Decimal = Field(..., description="Free margin")
     positions_count: int = Field(..., description="Number of open positions")
+    profit: Decimal = Field(..., description="Current profit")
+    leverage: int = Field(..., description="Account leverage")
+    currency: str = Field(..., description="Account currency")
+    name: str = Field(..., description="Account name")
+    server: str = Field(..., description="Trading server")
+    trade_allowed: bool = Field(..., description="Trading allowed flag")
+    limit_orders: int = Field(..., description="Maximum allowed orders")
+    margin_so_mode: int = Field(..., description="Margin SO mode")
 
 class TradeRequest(BaseModel):
     symbol: str = Field(..., description="Trading symbol (e.g., EURUSD)")

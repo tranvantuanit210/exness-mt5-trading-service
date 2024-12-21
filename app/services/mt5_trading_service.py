@@ -165,39 +165,6 @@ class MT5TradingService:
             logger.error(f"Error getting positions: {str(e)}")
             return []
 
-    async def get_account_info(self) -> Optional[AccountInfo]:
-        """
-        Get current account information and balance.
-        
-        Returns:
-        - AccountInfo with:
-            - Balance
-            - Equity
-            - Margin
-            - Free margin
-            - Number of open positions
-        - None: If account info cannot be retrieved
-        """
-        if not await self.base_service.ensure_connected():
-            return None
-            
-        try:
-            account_info = mt5.account_info()
-            if account_info is None:
-                return None
-                
-            return AccountInfo(
-                balance=Decimal(str(account_info.balance)),
-                equity=Decimal(str(account_info.equity)),
-                margin=Decimal(str(account_info.margin)),
-                free_margin=Decimal(str(account_info.margin_free)),
-                positions_count=account_info.open_positions
-            )
-            
-        except Exception as e:
-            logger.error(f"Error getting account info: {str(e)}")
-            return None
-
     async def close_position(self, ticket: int) -> TradeResponse:
         """
         Close a specific position by its ticket number.
