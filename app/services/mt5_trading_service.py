@@ -117,6 +117,7 @@ class MT5TradingService:
             logger.info(f"Order placed and verified successfully: Order ID {result.order}")
             return TradeResponse(
                 order_id=result.order,
+                symbol=trade_request.symbol,
                 status="success",
                 message="Order placed and verified successfully"
             )

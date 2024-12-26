@@ -95,12 +95,13 @@ class MT5PositionService:
         - TradeResponse with modification result
         """
         if not await self.base_service.ensure_connected():
-            return TradeResponse(order_id=0, status="error", message="Not connected to MT5")
+            return TradeResponse(order_id=ticket, symbol=None, status="error", message="Not connected to MT5")
         try:
             position = mt5.positions_get(ticket=ticket)
             if not position:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=None,
                     status="error",
                     message=f"Position {ticket} not found"
                 )
@@ -117,7 +118,8 @@ class MT5PositionService:
             result = mt5.order_send(request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=position.symbol,
                     status="error",
                     message=f"Failed to modify position: {result.comment}"
                 )
@@ -126,19 +128,21 @@ class MT5PositionService:
             verified = await self._verify_position_modification(ticket, modify_request)
             if not verified:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=position.symbol,
                     status="error",
                     message="Position modification verification failed"
                 )
             
             return TradeResponse(
                 order_id=ticket,
+                symbol=position.symbol,
                 status="success",
                 message="Position modified and verified successfully"
             )
         except Exception as e:
             logger.error(f"Error modifying position: {str(e)}")
-            return TradeResponse(order_id=0, status="error", message=str(e))
+            return TradeResponse(order_id=ticket, symbol=None, status="error", message=str(e))
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
@@ -160,7 +164,8 @@ class MT5PositionService:
         """
         if not await self.base_service.ensure_connected():
             return TradeResponse(
-                order_id=0,
+                order_id=ticket,
+                symbol=None,
                 status="error",
                 message="Failed to connect to MT5"
             )
@@ -169,7 +174,8 @@ class MT5PositionService:
             position = mt5.positions_get(ticket=ticket)
             if not position:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=None,
                     status="error",
                     message=f"Position {ticket} not found"
                 )
@@ -192,7 +198,8 @@ class MT5PositionService:
             result = mt5.order_send(request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=position.symbol,
                     status="error",
                     message=f"Failed to close position: {result.comment}"
                 )
@@ -201,13 +208,16 @@ class MT5PositionService:
             verified = await self._verify_position_closure(ticket)
             if not verified:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=position.symbol,
                     status="error",
                     message="Position closure verification failed"
                 )
                 
             return TradeResponse(
                 order_id=result.order,
+                symbol=position.symbol,
+                profit=Decimal(str(position.profit)),
                 status="success",
                 message="Position closed and verified successfully"
             )
@@ -215,7 +225,8 @@ class MT5PositionService:
         except Exception as e:
             logger.error(f"Error closing position: {str(e)}")
             return TradeResponse(
-                order_id=0,
+                order_id=ticket,
+                symbol=None,
                 status="error",
                 message=str(e)
             )
@@ -261,12 +272,13 @@ class MT5PositionService:
         Note: Creates opposite position with same volume to lock profit/loss
         """
         if not await self.base_service.ensure_connected():
-            return TradeResponse(order_id=0, status="error", message="Not connected to MT5")
+            return TradeResponse(order_id=ticket, symbol=None, status="error", message="Not connected to MT5")
         try:
             position = mt5.positions_get(ticket=ticket)
             if not position:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=None,
                     status="error",
                     message=f"Position {ticket} not found"
                 )
@@ -288,19 +300,22 @@ class MT5PositionService:
             result = mt5.order_send(request)
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return TradeResponse(
-                    order_id=0,
+                    order_id=ticket,
+                    symbol=None,
                     status="error",
                     message=f"Failed to create hedge position: {result.comment}"
                 )
             
             return TradeResponse(
                 order_id=result.order,
+                symbol=position.symbol,
+                profit=Decimal(str(position.profit)),
                 status="success",
                 message="Hedge position created successfully"
             )
         except Exception as e:
             logger.error(f"Error creating hedge position: {str(e)}")
-            return TradeResponse(order_id=0, status="error", message=str(e)) 
+            return TradeResponse(order_id=ticket, symbol=None, status="error", message=str(e)) 
 
     async def _verify_position_closure(self, ticket: int) -> bool:
         """

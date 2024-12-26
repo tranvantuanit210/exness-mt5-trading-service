@@ -55,12 +55,15 @@ def get_router(
                 await notification_service.send_telegram(
                     f"🔴 Position Closed\n\n"
                     f"Close Ticket: {ticket}\n"
+                    f"Symbol: {result.symbol}\n"
+                    f"Profit: {result.profit}\n"
                     f"✅ Status: Success"
                 )
             else:
                 await notification_service.send_telegram(
                     f"❌ Position Close Failed\n\n"
                     f"Ticket: {ticket}\n"
+                    f"Symbol: {result.symbol}\n"
                     f"Error: {result.message}"
                 )
 
@@ -72,6 +75,7 @@ def get_router(
             await notification_service.send_telegram(
                 f"❌ Position Close Error\n\n"
                 f"Ticket: {ticket}\n"
+                f"Symbol: {result.symbol}\n"
                 f"Details: {str(e)}"
             )
             raise HTTPException(status_code=400, detail=str(e))
@@ -104,14 +108,17 @@ def get_router(
                 await notification_service.send_telegram(
                     f"📝 Position Modified\n\n"
                     f"Modify Ticket: {ticket}\n"
+                    f"Symbol: {result.symbol}\n"
                     f"Stop Loss: {modify_request.stop_loss}\n"
                     f"Take Profit: {modify_request.take_profit}\n"
+                    f"Profit: {result.profit}\n"
                     f"✅ Status: Success"
                 )
             else:
                 await notification_service.send_telegram(
                     f"❌ Position Modify Failed\n\n"
                     f"Ticket: {ticket}\n"
+                    f"Symbol: {result.symbol}\n"
                     f"Error: {result.message}"
                 )
 
@@ -123,6 +130,7 @@ def get_router(
             await notification_service.send_telegram(
                 f"❌ Position Modify Error\n\n"
                 f"Ticket: {ticket}\n"
+                f"Symbol: {result.symbol}\n"
                 f"Details: {str(e)}"
             )
             raise HTTPException(status_code=400, detail=str(e))
@@ -146,7 +154,7 @@ def get_router(
             results = await position_service.close_all_positions()
             
             success_count = len([r for r in results if r.status == "success"])
-            success_tickets = [r.order_id for r in results if r.status == "success"]
+            success_tickets = [f"{r.order_id} ({r.symbol} {r.profit})" for r in results if r.status == "success"]    
             
             await notification_service.send_telegram(
                 f"🔴 All Positions Closed\n\n"

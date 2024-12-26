@@ -79,6 +79,8 @@ class TradeResponse(BaseModel):
     order_id: int = Field(..., description="Order ID from MT5")
     status: str = Field(..., description="Order status (success/error)")
     message: str = Field(..., description="Detailed message") 
+    symbol: Optional[str] = Field(None, description="Trading symbol")
+    profit: Optional[Decimal] = Field(None, description="Profit")
 
 class PendingOrder(BaseModel):
     ticket: int
