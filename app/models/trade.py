@@ -61,6 +61,7 @@ class TradeRequest(BaseModel):
         description="Order comment or note",
         max_length=100
     )
+    calculated_volume: Optional[float] = None
 
     class Config:
         json_schema_extra = {

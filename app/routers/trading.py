@@ -14,7 +14,7 @@ def get_router(service: MT5TradingService) -> APIRouter:
         Execute a market order with:
         - Symbol to trade
         - Order type (Buy or Sell)
-        - Volume (lot size)
+        - Amount (lot size)
         - Optional Stop Loss
         - Optional Take Profit
         - Optional comment

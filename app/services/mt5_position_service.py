@@ -182,8 +182,8 @@ class MT5PositionService:
                 "volume": float(position.volume),
                 "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
                 "price": mt5.symbol_info_tick(position.symbol).bid if position.type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(position.symbol).ask,
-                "deviation": self.TRADE_DEVIATION,
-                "magic": self.TRADE_MAGIC,
+                "deviation": TRADE_DEVIATION,
+                "magic": TRADE_MAGIC,
                 "comment": "python script close",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
@@ -278,8 +278,8 @@ class MT5PositionService:
                 "volume": float(position.volume),
                 "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
                 "price": mt5.symbol_info_tick(position.symbol).ask if position.type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(position.symbol).bid,
-                "deviation": self.TRADE_DEVIATION,
-                "magic": self.TRADE_MAGIC,
+                "deviation": TRADE_DEVIATION,
+                "magic": TRADE_MAGIC,
                 "comment": "python script hedge",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
@@ -307,7 +307,7 @@ class MT5PositionService:
         Verify that a position has been properly closed
         """
         try:
-            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            await asyncio.sleep(VERIFICATION_WAIT_TIME)
             position = mt5.positions_get(ticket=ticket)
             if position:
                 logger.error(f"Position {ticket} still exists after closure attempt")
@@ -322,7 +322,7 @@ class MT5PositionService:
         Verify that position levels were properly modified
         """
         try:
-            await asyncio.sleep(self.VERIFICATION_WAIT_TIME)
+            await asyncio.sleep(VERIFICATION_WAIT_TIME)
             position = mt5.positions_get(ticket=ticket)
             if not position:
                 logger.error(f"Cannot find position with ticket {ticket}")

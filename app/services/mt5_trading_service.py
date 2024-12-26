@@ -104,6 +104,9 @@ class MT5TradingService:
                 trade_request.amount
             )
             
+            # Add volume to trade_request for verification
+            trade_request.calculated_volume = volume
+            
             # Prepare trade request with calculated volume
             tick = mt5.symbol_info_tick(trade_request.symbol)
             if tick is None:
@@ -140,7 +143,7 @@ class MT5TradingService:
                     message=f"Order failed: {result.comment}"
                 )
 
-            # Verify trade result
+            # Verify trade result with the calculated volume
             verified = await self._verify_trade_result(result, trade_request)
             if not verified:
                 logger.error("Trade verification failed")
@@ -167,23 +170,11 @@ class MT5TradingService:
 
     async def _verify_trade_result(self, result: mt5.OrderSendResult, original_request: TradeRequest) -> bool:
         """
-        Verify trade execution by:
-        1. Check if the order exists
-        2. Compare important parameters
-        3. Verify order status
-
-        Args:
-            result: The result from MT5 order_send
-            original_request: The original trade request for comparison
-
-        Returns:
-            bool: True if verification passes, False otherwise
+        Verify trade execution by comparing position details with original request
         """
         try:
-            # Wait briefly to ensure order processing
             await asyncio.sleep(VERIFICATION_WAIT_TIME)
             
-            # Get the newly created position
             position = mt5.positions_get(ticket=result.order)
             if not position:
                 logger.error(f"Cannot find position with ticket {result.order}")
@@ -191,9 +182,9 @@ class MT5TradingService:
                 
             position = position[0]
             
-            # Verify critical parameters
+            # Verify critical parameters using calculated_volume
             if (position.symbol != original_request.symbol or
-                position.volume != float(original_request.volume) or
+                position.volume != float(original_request.calculated_volume) or
                 (position.type == mt5.ORDER_TYPE_BUY and original_request.order_type != OrderType.BUY) or
                 (position.type == mt5.ORDER_TYPE_SELL and original_request.order_type != OrderType.SELL)):
                 logger.error("Trade parameters mismatch")
@@ -214,6 +205,30 @@ class MT5TradingService:
             logger.error(f"Error during trade verification: {str(e)}")
             return False 
 
+    async def calculate_min_amount(self, symbol: str) -> float:
+        """
+        Calculate minimum required amount in USD for trading
+        
+        Args:
+            symbol: Trading symbol (e.g., EURUSD)
+            
+        Returns:
+            float: Minimum amount required in USD
+            
+        Raises:
+            ValueError: If symbol not found
+        """
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            raise ValueError(f"Symbol {symbol} not found")
+            
+        min_volume = symbol_info.volume_min
+        contract_size = symbol_info.trade_contract_size
+        current_price = symbol_info.ask
+        
+        min_amount = min_volume * contract_size * current_price
+        return round(min_amount, 2)
+
     async def calculate_volume_from_amount(self, symbol: str, amount: float) -> float:
         """
         Calculate trading volume (lot size) based on investment amount
@@ -228,29 +243,30 @@ class MT5TradingService:
         Raises:
             ValueError: If symbol not found or amount is outside allowed limits
         """
-        # Get symbol information
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
             raise ValueError(f"Symbol {symbol} not found")
             
-        # Get current market price
         current_price = symbol_info.ask
-        
-        # Get contract specifications
         contract_size = symbol_info.trade_contract_size
         
-        # Calculate volume (lot size)
-        # Formula: Volume = Amount / (Contract_Size * Current_Price)
         volume = round(amount / (contract_size * current_price), 2)
         
-        # Check minimum and maximum volume limits
         min_volume = symbol_info.volume_min
         max_volume = symbol_info.volume_max
         
         if volume < min_volume:
-            raise ValueError(f"Amount too small. Minimum volume required: {min_volume}")
+            min_amount = await self.calculate_min_amount(symbol)
+            raise ValueError(
+                f"Amount too small. Minimum required amount: ${min_amount} USD "
+                f"(minimum volume: {min_volume} lots)"
+            )
         if volume > max_volume:
-            raise ValueError(f"Amount too large. Maximum volume allowed: {max_volume}")
+            max_amount = max_volume * contract_size * current_price
+            raise ValueError(
+                f"Amount too large. Maximum allowed amount: ${round(max_amount, 2)} USD "
+                f"(maximum volume: {max_volume} lots)"
+            )
             
         return volume
  
