@@ -94,4 +94,32 @@ def get_router(service: MT5NotificationService) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    @router.post("/test",
+        summary="Test Notification System",
+        description="Send a test message to verify notification setup")
+    async def test_notification():
+        """
+        Send test notification to verify:
+        - Telegram connection
+        - Bot permissions
+        - Message formatting
+        """
+        try:
+            await service.send_telegram(
+                "🔔 <b>MT5 Trading</b>\n\n"
+                "✅ Connection Successful!\n"
+                "✅ Bot Permissions OK\n"
+                "✅ Channel Configuration OK\n\n"
+                "You will receive trading alerts in this channel."
+            )
+            return {
+                "status": "success", 
+                "message": "Test notification sent successfully"
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send test notification: {str(e)}"
+            )
+
     return router 

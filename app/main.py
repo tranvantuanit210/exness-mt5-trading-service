@@ -112,7 +112,7 @@ async def health_check():
 
 # Include routers
 app.include_router(
-    trading.get_router(mt5_trading_service)
+    trading.get_router(mt5_trading_service, mt5_notification_service)
 )
 app.include_router(
     market_info.get_router(mt5_market_service)
@@ -124,7 +124,7 @@ app.include_router(
     history.get_router(mt5_history_service)
 )
 app.include_router(
-    position.get_router(mt5_position_service)
+    position.get_router(mt5_position_service, mt5_notification_service)
 )
 app.include_router(
     account.get_router(mt5_account_service)

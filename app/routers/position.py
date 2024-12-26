@@ -1,9 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ..services.mt5_position_service import MT5PositionService
+from ..services.mt5_notification_service import MT5NotificationService
 from ..models.trade import TradeResponse, Position, ModifyPositionRequest
 
-def get_router(position_service: MT5PositionService) -> APIRouter:
+def get_router(
+    position_service: MT5PositionService,
+    notification_service: MT5NotificationService
+) -> APIRouter:
     router = APIRouter(prefix="/positions", tags=["Position Management"])
 
     @router.get("/",
@@ -44,10 +48,33 @@ def get_router(position_service: MT5PositionService) -> APIRouter:
         - Closure confirmation and P/L if successful
         - Error message if closure failed
         """
-        result = await position_service.close_position(ticket)
-        if result.status == "error":
-            raise HTTPException(status_code=400, detail=result.message)
-        return result
+        try:
+            result = await position_service.close_position(ticket)
+            
+            if result.status == "success":
+                await notification_service.send_telegram(
+                    f"🔴 Position Closed\n\n"
+                    f"Close Ticket: {ticket}\n"
+                    f"✅ Status: Success"
+                )
+            else:
+                await notification_service.send_telegram(
+                    f"❌ Position Close Failed\n\n"
+                    f"Ticket: {ticket}\n"
+                    f"Error: {result.message}"
+                )
+
+            if result.status == "error":
+                raise HTTPException(status_code=400, detail=result.message)
+            return result
+            
+        except Exception as e:
+            await notification_service.send_telegram(
+                f"❌ Position Close Error\n\n"
+                f"Ticket: {ticket}\n"
+                f"Details: {str(e)}"
+            )
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/{ticket}/modify",
         response_model=TradeResponse,
@@ -70,10 +97,35 @@ def get_router(position_service: MT5PositionService) -> APIRouter:
         - Success confirmation if modified
         - Error message if modification failed
         """
-        result = await position_service.modify_position(ticket, modify_request)
-        if result.status == "error":
-            raise HTTPException(status_code=400, detail=result.message)
-        return result
+        try:
+            result = await position_service.modify_position(ticket, modify_request)
+            
+            if result.status == "success":
+                await notification_service.send_telegram(
+                    f"📝 Position Modified\n\n"
+                    f"Modify Ticket: {ticket}\n"
+                    f"Stop Loss: {modify_request.stop_loss}\n"
+                    f"Take Profit: {modify_request.take_profit}\n"
+                    f"✅ Status: Success"
+                )
+            else:
+                await notification_service.send_telegram(
+                    f"❌ Position Modify Failed\n\n"
+                    f"Ticket: {ticket}\n"
+                    f"Error: {result.message}"
+                )
+
+            if result.status == "error":
+                raise HTTPException(status_code=400, detail=result.message)
+            return result
+            
+        except Exception as e:
+            await notification_service.send_telegram(
+                f"❌ Position Modify Error\n\n"
+                f"Ticket: {ticket}\n"
+                f"Details: {str(e)}"
+            )
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/close-all",
         response_model=List[TradeResponse],
@@ -90,7 +142,27 @@ def get_router(position_service: MT5PositionService) -> APIRouter:
         - Success/failure status for each position
         - Error messages for failed closures
         """
-        return await position_service.close_all_positions()
+        try:
+            results = await position_service.close_all_positions()
+            
+            success_count = len([r for r in results if r.status == "success"])
+            success_tickets = [r.order_id for r in results if r.status == "success"]
+            
+            await notification_service.send_telegram(
+                f"🔴 All Positions Closed\n\n"
+                f"Positions Closed: {success_count}\n"
+                f"Close Tickets: {', '.join(map(str, success_tickets))}\n"
+                f"✅ Status: Complete"
+            )
+            
+            return results
+            
+        except Exception as e:
+            await notification_service.send_telegram(
+                f"❌ Close All Positions Error\n\n"
+                f"Details: {str(e)}"
+            )
+            raise HTTPException(status_code=500, detail=str(e))
 
     @router.post("/hedge/{ticket}",
         response_model=TradeResponse,

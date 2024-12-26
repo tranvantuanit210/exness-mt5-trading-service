@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from ..services.mt5_trading_service import MT5TradingService
-from ..models.trade import TradeRequest, TradeResponse
+from ..services.mt5_notification_service import MT5NotificationService
+from ..models.trade import OrderType, TradeRequest, TradeResponse
 
-def get_router(service: MT5TradingService) -> APIRouter:
+def get_router(
+    trading_service: MT5TradingService,
+    notification_service: MT5NotificationService
+) -> APIRouter:
     router = APIRouter(prefix="/trading", tags=["Basic Trading"])
 
     @router.post("/market-order",
@@ -27,11 +31,33 @@ def get_router(service: MT5TradingService) -> APIRouter:
         - Error message if execution failed
         """
         try:
-            result = await service.execute_market_order(trade_request)
+            result = await trading_service.execute_market_order(trade_request)
+            
+            if result.status == "success":
+                await notification_service.send_telegram(
+                    f"🎯 New Market Order\n\n"
+                    f"Symbol: {trade_request.symbol}\n"
+                    f"Type: {'BUY' if trade_request.order_type == OrderType.BUY else 'SELL'}\n"
+                    f"Volume: {trade_request.calculated_volume}\n"
+                    f"Ticket: {result.order_id}\n"
+                    f"✅ Status: Success"
+                )
+            else:
+                await notification_service.send_telegram(
+                    f"❌ Market Order Failed\n\n"
+                    f"Symbol: {trade_request.symbol}\n"
+                    f"Error: {result.message}"
+                )
+
             if result.status == "error":
                 raise HTTPException(status_code=400, detail=result.message)
             return result
+            
         except Exception as e:
+            await notification_service.send_telegram(
+                f"❌ Trading Error\n\n"
+                f"Details: {str(e)}"
+            )
             raise HTTPException(status_code=500, detail=str(e))
 
     return router

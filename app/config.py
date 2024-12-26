@@ -8,9 +8,9 @@ class Settings(BaseSettings):
     MT5_SERVER: str
     
     # Notification Settings
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    TELEGRAM_CHAT_ID: Optional[str] = None
-    DISCORD_WEBHOOK_URL: Optional[str] = None
+    TELEGRAM_BOT_TOKEN: str
+    TELEGRAM_CHAT_ID: str
+    DISCORD_WEBHOOK_URL: str
 
     class Config:
         env_file = ".env"
