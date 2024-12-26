@@ -36,45 +36,6 @@ class MT5TradingService:
         """Check if trading service is initialized and connected"""
         return self.base_service.initialized
 
-    def _prepare_trade_request(self, trade_request: TradeRequest) -> Dict[str, Any]:
-        """
-        Prepare trade request parameters for MT5 API.
-        
-        Parameters:
-        - trade_request: Trading request with order details
-        
-        Returns:
-        - Dict containing formatted request parameters for MT5 API
-        
-        Raises:
-        - ValueError: If symbol information cannot be retrieved
-        """
-        tick = mt5.symbol_info_tick(trade_request.symbol)
-        if tick is None:
-            raise ValueError(f"Cannot get symbol info for {trade_request.symbol}")
-            
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": trade_request.symbol,
-            "volume": float(trade_request.volume),
-            "type": (mt5.ORDER_TYPE_BUY 
-                    if trade_request.order_type == OrderType.BUY 
-                    else mt5.ORDER_TYPE_SELL),
-            "price": tick.ask if trade_request.order_type == OrderType.BUY else tick.bid,
-            "deviation": TRADE_DEVIATION,
-            "magic": TRADE_MAGIC,
-            "comment": "python script order",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
-        }
-        
-        if trade_request.stop_loss:
-            request["sl"] = float(trade_request.stop_loss)
-        if trade_request.take_profit:
-            request["tp"] = float(trade_request.take_profit)
-            
-        return request
-
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=RETRY_MULTIPLIER, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
@@ -210,7 +171,7 @@ class MT5TradingService:
         Calculate minimum required amount in USD for trading
         
         Args:
-            symbol: Trading symbol (e.g., EURUSD)
+            symbol: Trading symbol (e.g., BTCUSDm)
             
         Returns:
             float: Minimum amount required in USD
@@ -234,7 +195,7 @@ class MT5TradingService:
         Calculate trading volume (lot size) based on investment amount
         
         Args:
-            symbol: Trading symbol (e.g., EURUSD)
+            symbol: Trading symbol (e.g., BTCUSDm)
             amount: Investment amount in deposit currency
             
         Returns:

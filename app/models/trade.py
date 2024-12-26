@@ -37,7 +37,7 @@ class AccountInfo(BaseModel):
 class TradeRequest(BaseModel):
     symbol: str = Field(
         ..., 
-        description="Trading symbol (e.g., EURUSD, XAUUSD, BTCUSD)"
+        description="Trading symbol (e.g., BTCUSDm, XAUUSD, BTCUSD)"
     )
     order_type: OrderType = Field(
         ..., 
@@ -66,7 +66,7 @@ class TradeRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "symbol": "EURUSD",
+                "symbol": "BTCUSDm",
                 "order_type": "BUY",
                 "amount": 1000,
                 "stop_loss": 1.0800,

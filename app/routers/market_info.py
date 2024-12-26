@@ -1,25 +1,28 @@
-from fastapi import APIRouter, HTTPException
-from typing import List
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
 from ..services.mt5_market_service import MT5MarketService
-from ..models.market import Symbol, SymbolInfo, TickData, OHLC
+from ..models.market import SymbolInfo, TickData, OHLC, SymbolList
 
-def get_router(service: MT5MarketService) -> APIRouter:
-    router = APIRouter(prefix="/market", tags=["Market Information"])
+def get_router(market_service: MT5MarketService) -> APIRouter:
+    router = APIRouter(prefix="/market", tags=["Market Info"])
 
-    @router.get("/symbols",
-        response_model=List[Symbol],
-        summary="Get Available Symbols",
-        description="Retrieve a list of all available trading symbols with their basic information")
-    async def get_symbols() -> List[Symbol]:
+    @router.get("/symbols", response_model=SymbolList,
+        summary="Get and Search Symbols",
+        description="Get all trading symbols or search with optional filters")
+    async def search_symbols(
+        search: Optional[str] = Query(None, description="Search term (e.g., 'BTC', 'GOLD', 'USD')")
+    ):
         """
-        Returns list of available trading symbols with:
-        - Symbol name
-        - Description
-        - Path in symbol tree
-        - Point value
-        - Decimal digits
+        Get all symbols or search with filters
+        
+        Examples:
+        - /market/symbols - Get all symbols
+        - /market/symbols?search=btc - Search for Bitcoin related symbols
+        - /market/symbols?search=gold - Search for Gold related symbols
+        - /market/symbols?search=usd - Search for USD currency pairs
         """
-        return await service.get_symbols()
+        symbols = await market_service.search_symbols(search)
+        return SymbolList(symbols=symbols)
 
     @router.get("/symbols/{symbol}/info",
         response_model=SymbolInfo,
@@ -34,7 +37,7 @@ def get_router(service: MT5MarketService) -> APIRouter:
         - Minimum and maximum volumes
         - Volume step
         """
-        info = await service.get_symbol_info(symbol)
+        info = await market_service.get_symbol_info(symbol)
         if not info:
             raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found")
         return info
@@ -49,7 +52,7 @@ def get_router(service: MT5MarketService) -> APIRouter:
         - Ask price
         - Last trade price
         """
-        price = await service.get_symbol_price(symbol)
+        price = await market_service.get_symbol_price(symbol)
         if not price:
             raise HTTPException(status_code=404, detail=f"Price not available for {symbol}")
         return price
@@ -68,12 +71,8 @@ def get_router(service: MT5MarketService) -> APIRouter:
         - Bid/Ask prices
         - Last trade price
         - Volume
-        
-        Parameters:
-        - symbol: Trading symbol name
-        - count: Number of ticks to retrieve (default: 100)
         """
-        return await service.get_symbol_ticks(symbol, count)
+        return await market_service.get_symbol_ticks(symbol, count)
 
     @router.get("/symbols/{symbol}/ohlc",
         response_model=List[OHLC],
@@ -92,12 +91,7 @@ def get_router(service: MT5MarketService) -> APIRouter:
         - Low price
         - Close price
         - Volume
-        
-        Parameters:
-        - symbol: Trading symbol name
-        - timeframe: Time period (M1, M5, M15, M30, H1, H4, D1)
-        - count: Number of candles to retrieve (default: 100)
         """
-        return await service.get_symbol_ohlc(symbol, timeframe, count)
+        return await market_service.get_symbol_ohlc(symbol, timeframe, count)
 
     return router 

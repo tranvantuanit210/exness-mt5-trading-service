@@ -4,7 +4,7 @@ from datetime import datetime
 import MetaTrader5 as mt5
 import logging
 from .mt5_base_service import MT5BaseService
-from ..models.market import Symbol, SymbolInfo, TickData, OHLC
+from ..models.market import SymbolInfo, TickData, OHLC
 
 logger = logging.getLogger(__name__)
 
@@ -23,45 +23,12 @@ class MT5MarketService:
         """
         self.base_service = base_service
 
-    async def get_symbols(self) -> List[Symbol]:
-        """
-        Get all available trading symbols from MT5.
-        
-        Returns:
-        - List[Symbol]: List of available symbols with their properties
-            - name: Symbol name (e.g., "EURUSD")
-            - description: Symbol description
-            - path: Symbol path in market watch
-            - point: Minimal price change
-            - digits: Price decimal places
-            
-        Note: Returns empty list if connection fails
-        """
-        if not await self.base_service.ensure_connected():
-            return []
-            
-        symbols = mt5.symbols_get()
-        if symbols is None:
-            return []
-            
-        result = []
-        for symbol in symbols:
-            result.append(Symbol(
-                name=symbol.name,
-                description=symbol.description,
-                path=symbol.path,
-                point=symbol.point,
-                digits=symbol.digits
-            ))
-            
-        return result
-
     async def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
         """
         Get detailed information about a specific symbol.
         
         Parameters:
-        - symbol: Symbol name to get info for (e.g., "EURUSD")
+        - symbol: Symbol name to get info for (e.g., "BTCUSDm")
         
         Returns:
         - SymbolInfo: Detailed symbol information including:
@@ -201,3 +168,54 @@ class MT5MarketService:
         except Exception as e:
             logger.error(f"Error getting OHLC data: {str(e)}")
             return []
+
+    async def search_symbols(self, query: str = None) -> List[Dict]:
+        """
+        Search and get available trading symbols with pricing information
+        """
+        symbols = mt5.symbols_get()
+        if symbols is None:
+            raise ValueError("Failed to get symbols from MT5")
+
+        result = []
+        for symbol in symbols:
+            # Get current price info
+            tick = mt5.symbol_info_tick(symbol.name)
+            if tick is None:
+                continue
+
+            # Calculate minimum amount in USD
+            min_amount = symbol.volume_min * symbol.trade_contract_size * tick.ask
+            amount_step = symbol.volume_step * symbol.trade_contract_size * tick.ask
+
+            symbol_info = {
+                "name": symbol.name,
+                "description": symbol.description,
+                "base_currency": symbol.currency_base,
+                "profit_currency": symbol.currency_profit,
+                "trade_contract_size": symbol.trade_contract_size,
+                "minimum_volume": symbol.volume_min,
+                "maximum_volume": symbol.volume_max,
+                "volume_step": symbol.volume_step,
+                "category": "Crypto" if "BTC" in symbol.name or "ETH" in symbol.name 
+                           else "Metals" if "GOLD" in symbol.name or "SILVER" in symbol.name
+                           else "Forex" if "USD" in symbol.name or "EUR" in symbol.name
+                           else "Other",
+                "current_price": tick.ask,  # Current asking price
+                "minimum_amount_usd": round(min_amount, 2),  # Minimum amount in USD
+                "amount_step_usd": round(amount_step, 2),  # Amount step in USD
+                "bid": tick.bid,  # Bid price
+                "ask": tick.ask,  # Ask price
+                "spread": round(tick.ask - tick.bid, symbol.digits)  # Current spread
+            }
+            
+            # Filter by search query if provided
+            if query:
+                search_term = query.upper()
+                if (search_term in symbol.name.upper() or 
+                    search_term in symbol.description.upper()):
+                    result.append(symbol_info)
+            else:
+                result.append(symbol_info)
+
+        return result

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import List
 from datetime import datetime
 from decimal import Decimal
 
@@ -27,11 +28,25 @@ class OHLC(BaseModel):
     high: Decimal
     low: Decimal
     close: Decimal
-    volume: Decimal 
+    volume: Decimal
 
-class Symbol(BaseModel):
+# New models for symbol search
+class SearchSymbolInfo(BaseModel):
     name: str
     description: str
-    path: str
-    point: float
-    digits: int
+    base_currency: str
+    profit_currency: str
+    trade_contract_size: float
+    minimum_volume: float
+    maximum_volume: float
+    volume_step: float
+    category: str
+    current_price: float
+    minimum_amount_usd: float
+    amount_step_usd: float
+    bid: float
+    ask: float
+    spread: float
+
+class SymbolList(BaseModel):
+    symbols: List[SearchSymbolInfo]
