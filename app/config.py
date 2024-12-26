@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_CHAT_ID: str
     DISCORD_WEBHOOK_URL: str
+    
+    # MongoDB settings
+    MONGODB_URL: str
+    MONGODB_DB: str
 
     class Config:
         env_file = ".env"
