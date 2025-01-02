@@ -49,3 +49,13 @@ class TradingSignal(BaseModel):
                 "created_at": "2025-01-02T14:21:12.172Z"
             }
         } 
+
+class TimeframeSignal(BaseModel):
+    timeframe: str
+    signal_type: Optional[SignalType] = None
+    entry_price: float
+
+class SymbolSignalsResponse(BaseModel):
+    symbol: str
+    timestamp: datetime
+    signals: dict[str, TimeframeSignal]  # key là timeframe (e.g., "1m", "3m", "5m") 

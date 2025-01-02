@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import motor.motor_asyncio
 from bson import ObjectId
@@ -143,3 +143,37 @@ class MT5SignalService:
         if hasattr(self, 'client'):
             self.client.close()
             logger.info("MongoDB connection closed") 
+
+    async def get_signals_by_symbol(
+        self,
+        symbol: str,
+        timeframes: List[str],
+        from_date: datetime,
+        to_date: datetime
+    ) -> List[TradingSignal]:
+        """
+        Get signals for a symbol with multiple timeframes within a date range
+        
+        Args:
+            symbol: Trading symbol to get signals for
+            timeframes: List of timeframes to include
+            from_date: Start date time
+            to_date: End date time
+            
+        Returns:
+            List of TradingSignal objects matching the criteria
+        """
+        try:
+            signals = await self.signals.find({
+                "symbol": symbol,
+                "timeframe": {"$in": timeframes},
+                "created_at": {
+                    "$gte": from_date,
+                    "$lte": to_date
+                }
+            }).sort("created_at", -1).to_list(None)
+            
+            return [TradingSignal(**signal) for signal in signals]
+        except Exception as e:
+            logger.error(f"Error getting signals for symbol {symbol}: {str(e)}")
+            raise 
