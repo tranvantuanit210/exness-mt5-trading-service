@@ -8,23 +8,44 @@ class SignalType(str, Enum):
     DOWN = "DOWN"
 
 class TimeFrame(str, Enum):
-    M1 = "M1"    # 1 minute (60 seconds)
-    M5 = "M5"    # 5 minutes (300 seconds)
-    M15 = "M15"  # 15 minutes (900 seconds)
-    M30 = "M30"  # 30 minutes (1800 seconds)
-    H1 = "H1"    # 1 hour (3600 seconds)
-    H4 = "H4"    # 4 hours (14400 seconds)
-    D1 = "D1"    # 1 day (86400 seconds)
-    W1 = "W1"    # 1 week (604800 seconds)
-    MN1 = "MN1"  # 1 month (average 2592000 seconds)
+    S1 = "S"      # 1 second
+    S5 = "5S"     # 5 seconds  
+    S15 = "15S"   # 15 seconds
+    S30 = "30S"   # 30 seconds
+    M1 = "1"      # 1 minute
+    M3 = "3"      # 3 minutes
+    M5 = "5"      # 5 minutes
+    M15 = "15"    # 15 minutes
+    M30 = "30"    # 30 minutes
+    M45 = "45"    # 45 minutes
+    H1 = "60"     # 1 hour
+    H2 = "120"    # 2 hours
+    H3 = "180"    # 3 hours
+    H4 = "240"    # 4 hours
+    D1 = "D"      # 1 day
+    D5 = "5D"     # 5 days
+    W1 = "W"      # 1 week
+    MN1 = "M"     # 1 month
+    Q1 = "3M"     # 1 quarter (3 months)
+    Y1 = "12M"    # 1 year
 
 class TradingSignal(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")  # MongoDB's _id field
-    symbol: str
-    signal_type: SignalType
-    timeframe: TimeFrame
-    entry_price: float
-    created_at: datetime = datetime.now()
+    _id: Optional[str] = None
+    symbol: str = Field(..., description="Trading symbol (e.g. BTCUSDT)")
+    signal_type: SignalType = Field(..., description="Signal type: UP or DOWN")
+    timeframe: TimeFrame = Field(..., description="Trading timeframe")
+    entry_price: float = Field(..., description="Entry price for the signal")
+    created_at: datetime = Field(default_factory=datetime.now, description="Signal creation timestamp")
 
     class Config:
-        allow_population_by_field_name = True  # Allow both _id and id 
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "_id": "67763f3f90a1c1a9b9bb8851",
+                "symbol": "BTCUSDT",
+                "signal_type": "UP",
+                "timeframe": "S",
+                "entry_price": 0.0,
+                "created_at": "2025-01-02T14:21:12.172Z"
+            }
+        } 
