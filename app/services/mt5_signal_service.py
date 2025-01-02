@@ -177,3 +177,39 @@ class MT5SignalService:
         except Exception as e:
             logger.error(f"Error getting signals for symbol {symbol}: {str(e)}")
             raise 
+
+    async def get_distinct_symbols(self) -> List[str]:
+        """
+        Get list of distinct symbols from signals collection.
+        
+        Returns:
+            List[str]: List of unique symbols
+            
+        Raises:
+            DatabaseConnectionError: If database operation fails
+        """
+        try:
+            symbols = await self.signals.distinct("symbol")
+            logger.info(f"Retrieved {len(symbols)} distinct symbols")
+            return symbols
+        except Exception as e:
+            logger.error(f"Failed to get distinct symbols: {str(e)}")
+            raise DatabaseConnectionError("Could not retrieve distinct symbols from database") from e
+
+    async def get_distinct_timeframes(self) -> List[str]:
+        """
+        Get list of distinct timeframes from signals collection.
+        
+        Returns:
+            List[str]: List of unique timeframes
+            
+        Raises:
+            DatabaseConnectionError: If database operation fails
+        """
+        try:
+            timeframes = await self.signals.distinct("timeframe")
+            logger.info(f"Retrieved {len(timeframes)} distinct timeframes")
+            return timeframes
+        except Exception as e:
+            logger.error(f"Failed to get distinct timeframes: {str(e)}")
+            raise DatabaseConnectionError("Could not retrieve distinct timeframes from database") from e 

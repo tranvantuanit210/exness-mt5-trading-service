@@ -118,4 +118,28 @@ def get_router(
             raise HTTPException(status_code=404, detail=result["message"])
         return result
 
+    @router.get("/symbols",
+        response_model=List[str],
+        summary="Get Distinct Symbols",
+        description="Get list of all unique trading symbols")
+    async def get_symbols():
+        """Get list of all available trading symbols"""
+        try:
+            symbols = await signal_service.get_distinct_symbols()
+            return symbols
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get("/timeframes",
+        response_model=List[str],
+        summary="Get Distinct Timeframes",
+        description="Get list of all unique timeframes")
+    async def get_timeframes():
+        """Get list of all available timeframes"""
+        try:
+            timeframes = await signal_service.get_distinct_timeframes()
+            return timeframes
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     return router 
