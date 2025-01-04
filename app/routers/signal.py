@@ -57,7 +57,6 @@ def get_router(
         If a timeframe has no data for a timestamp, it will be marked as NA.
         """
         try:
-            # Convert dates to datetime with start and end of day
             from_datetime = datetime.combine(from_date, time.min)
             to_datetime = datetime.combine(to_date, time.max)
 
@@ -71,9 +70,8 @@ def get_router(
             # Group signals by timestamp
             grouped_signals = {}
             
-            # First, get all unique timestamps from 1m timeframe
-            one_minute_signals = [s for s in signals if s.timeframe.value == "1"]
-            for signal in one_minute_signals:
+            # Get timestamps from all timeframes
+            for signal in signals:
                 timestamp = signal.created_at.replace(second=0, microsecond=0)
                 if timestamp not in grouped_signals:
                     grouped_signals[timestamp] = {
@@ -88,18 +86,15 @@ def get_router(
                             ) for tf in timeframes
                         }
                     }
-            
-            # Then fill in available signals for all timeframes
-            for signal in signals:
-                timestamp = signal.created_at.replace(second=0, microsecond=0)
-                if timestamp in grouped_signals:  # Only update timestamps that exist in 1m data
-                    grouped_signals[timestamp]["signals"][signal.timeframe.value] = TimeframeSignal(
-                        timeframe=signal.timeframe.value,
-                        signal_type=signal.signal_type,
-                        entry_price=signal.entry_price
-                    )
+                
+                # Update signal for corresponding timeframe
+                grouped_signals[timestamp]["signals"][signal.timeframe.value] = TimeframeSignal(
+                    timeframe=signal.timeframe.value,
+                    signal_type=signal.signal_type,
+                    entry_price=signal.entry_price
+                )
 
-            # Sort results by timestamp descending
+            # Sort results by timestamp in descending order
             result = [SymbolSignalsResponse(**data) for data in grouped_signals.values()]
             result.sort(key=lambda x: x.timestamp, reverse=True)
 
